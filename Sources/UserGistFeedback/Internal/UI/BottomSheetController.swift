@@ -1,8 +1,9 @@
 import Foundation
 import UIKit
 
-/// Hosts `PromptView` inside a content-sized bottom sheet whose visible
-/// structure matches the React Native/dashboard preview on every iOS version.
+/// Hosts `PromptView` in a content-sized bottom sheet. The background spans the
+/// full screen width in every orientation with rounded top corners (RN
+/// PromptSheet); the prompt view keeps its controls inside the safe area.
 final class BottomSheetController: UIViewController {
     private let promptView: PromptView
     private let theme: ResolvedTheme
@@ -14,9 +15,10 @@ final class BottomSheetController: UIViewController {
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .custom
         transitioningDelegate = sheetTransition
-        preferredContentSize = CGSize(width: 0, height: 280)
+        let hintWidth = promptView.layoutHint?.size.width ?? UIScreen.main.bounds.width
+        preferredContentSize = CGSize(width: 0, height: promptView.preferredHeight(forWidth: hintWidth))
         promptView.onPreferredHeightChange = { [weak self] height in
-            guard let self else { return }
+            guard let self, abs(self.preferredContentSize.height - height) > 0.5 else { return }
             self.preferredContentSize = CGSize(width: 0, height: height)
             self.presentationController?.containerView?.setNeedsLayout()
         }
@@ -27,17 +29,19 @@ final class BottomSheetController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = theme.background
+        overrideUserInterfaceStyle = theme.interfaceStyle
         view.clipsToBounds = true
         view.layer.cornerRadius = theme.radius
+        view.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
 
         promptView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(promptView)
 
         NSLayoutConstraint.activate([
-            promptView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            promptView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            promptView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            promptView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
             promptView.topAnchor.constraint(equalTo: view.topAnchor),
-            promptView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+            promptView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
     }
 
@@ -89,8 +93,11 @@ private final class PromptSheetPresentationController: UIPresentationController 
         guard let container = containerView else { return }
         observeKeyboard()
         dimmer.frame = container.bounds
-        dimmer.backgroundColor = UIColor.black.withAlphaComponent(0.4)
+        dimmer.backgroundColor = UIColor.black.withAlphaComponent(0.45)
         dimmer.alpha = 0
+        dimmer.isAccessibilityElement = true
+        dimmer.accessibilityLabel = "Dismiss"
+        dimmer.accessibilityTraits = .button
         container.insertSubview(dimmer, at: 0)
         let tap = UITapGestureRecognizer(target: self, action: #selector(didTapDimmer))
         dimmer.addGestureRecognizer(tap)
@@ -119,6 +126,11 @@ private final class PromptSheetPresentationController: UIPresentationController 
         super.containerViewDidLayoutSubviews()
         dimmer.frame = containerView?.bounds ?? .zero
         presentedView?.frame = frameOfPresentedViewInContainerView
+    }
+
+    override func preferredContentSizeDidChange(forChildContentContainer container: UIContentContainer) {
+        super.preferredContentSizeDidChange(forChildContentContainer: container)
+        containerView?.setNeedsLayout()
     }
 
     deinit {
@@ -157,7 +169,8 @@ private final class PromptSheetPresentationController: UIPresentationController 
         let info = notification.userInfo
         let screenFrame = (info?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue ?? .zero
         let frame = container.convert(screenFrame, from: nil)
-        keyboardOverlap = max(0, container.bounds.maxY - frame.minY)
+        let hiding = notification.name == UIResponder.keyboardWillHideNotification
+        keyboardOverlap = hiding ? 0 : max(0, container.bounds.maxY - frame.minY)
 
         let duration = (info?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.25
         UIView.animate(
@@ -166,11 +179,15 @@ private final class PromptSheetPresentationController: UIPresentationController 
             options: [.beginFromCurrentState, .curveEaseInOut]
         ) {
             self.presentedView?.frame = self.frameOfPresentedViewInContainerView
+            self.presentedView?.layoutIfNeeded()
         }
     }
 }
 
 enum PromptSheetLayout {
+    /// Shortest sheet; below this the header and one control would crowd.
+    static let minimumHeight: CGFloat = 160
+
     static func frame(
         containerBounds: CGRect,
         safeTop: CGFloat,
@@ -180,7 +197,7 @@ enum PromptSheetLayout {
         let overlap = min(max(keyboardOverlap, 0), containerBounds.height)
         let usableBottom = containerBounds.maxY - overlap
         let maxHeight = max(0, usableBottom - safeTop - 16)
-        let height = min(max(requestedHeight, 280), maxHeight)
+        let height = min(max(requestedHeight, minimumHeight), maxHeight)
         return CGRect(
             x: containerBounds.minX,
             y: usableBottom - height,
@@ -198,25 +215,25 @@ private final class PromptSheetAnimator: NSObject, UIViewControllerAnimatedTrans
     }
 
     func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
-        0.28
+        UIAccessibility.isReduceMotionEnabled ? 0.18 : 0.28
     }
 
     func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {
         let duration = transitionDuration(using: transitionContext)
+        let reduceMotion = UIAccessibility.isReduceMotionEnabled
         if presenting {
-            guard let toView = transitionContext.view(forKey: .to) else {
+            guard let toView = transitionContext.view(forKey: .to),
+                  let toController = transitionContext.viewController(forKey: .to) else {
                 transitionContext.completeTransition(false)
                 return
             }
             transitionContext.containerView.addSubview(toView)
-            let finalFrame = transitionContext.finalFrame(for: transitionContext.viewController(forKey: .to)!)
-            toView.frame = finalFrame.offsetBy(dx: 0, dy: finalFrame.height)
-            UIView.animate(
-                withDuration: duration,
-                delay: 0,
-                options: [.curveEaseOut, .beginFromCurrentState]
-            ) {
+            let finalFrame = transitionContext.finalFrame(for: toController)
+            toView.frame = reduceMotion ? finalFrame : finalFrame.offsetBy(dx: 0, dy: finalFrame.height)
+            toView.alpha = reduceMotion ? 0 : 1
+            UIView.animate(withDuration: duration, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
                 toView.frame = finalFrame
+                toView.alpha = 1
             } completion: { finished in
                 transitionContext.completeTransition(finished)
             }
@@ -225,12 +242,12 @@ private final class PromptSheetAnimator: NSObject, UIViewControllerAnimatedTrans
                 transitionContext.completeTransition(false)
                 return
             }
-            UIView.animate(
-                withDuration: duration,
-                delay: 0,
-                options: [.curveEaseIn, .beginFromCurrentState]
-            ) {
-                fromView.frame = fromView.frame.offsetBy(dx: 0, dy: fromView.frame.height)
+            UIView.animate(withDuration: duration, delay: 0, options: [.curveEaseIn, .beginFromCurrentState]) {
+                if reduceMotion {
+                    fromView.alpha = 0
+                } else {
+                    fromView.frame = fromView.frame.offsetBy(dx: 0, dy: fromView.frame.height)
+                }
             } completion: { finished in
                 transitionContext.completeTransition(finished)
             }

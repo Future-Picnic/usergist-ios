@@ -182,9 +182,11 @@ final class IdentityLifecycleTests: XCTestCase {
         runtime.consentStore.update(Consent(push: true))
         let queue = DispatchQueue(label: "push-invalidation-test")
         func registrar() -> PushRegistrar {
-            PushRegistrar(apiClient: runtime.apiClient, identity: runtime.identityStore,
+            let result = PushRegistrar(apiClient: runtime.apiClient, identity: runtime.identityStore,
                 consent: runtime.consentStore, logger: runtime.logger, queue: queue,
                 environment: "sandbox", secure: secure)
+            result.permissionStatus = { $0(false) }
+            return result
         }
         let first = registrar()
         first.onSubscriptionState = { if $0.registered { registered.fulfill() } }
@@ -233,6 +235,7 @@ final class IdentityLifecycleTests: XCTestCase {
         let registrar = PushRegistrar(apiClient: runtime.apiClient, identity: runtime.identityStore,
             consent: runtime.consentStore, logger: runtime.logger, queue: queue,
             environment: "sandbox", secure: secure)
+        registrar.permissionStatus = { $0(false) }
         registrar.register(token: "device")
         wait(for: [entered], timeout: 2)
         registrar.invalidate(token: "device")
@@ -248,6 +251,50 @@ final class IdentityLifecycleTests: XCTestCase {
         wait(for: [unregistered], timeout: 2)
         XCTAssertEqual(registrations, 1)
         session.invalidateAndCancel()
+    }
+
+    func testWithdrawnPushConsentInvalidatesOnceAndRestoresRetainedToken() throws {
+        let (runtime, session, secure) = try makeRuntime()
+        defer { session.invalidateAndCancel() }
+        runtime.apiClient.setSubjectToken("st_anonymous")
+        runtime.consentStore.update(Consent(push: true))
+        let first = expectation(description: "registered")
+        let revoked = expectation(description: "revoked")
+        let restored = expectation(description: "restored")
+        let duplicate = expectation(description: "no duplicate revocation")
+        duplicate.isInverted = true
+        var registrations = 0, invalidations = 0
+        IdentityURLProtocol.handler = { request, _ in
+            if request.url!.path.hasSuffix("/register-token") {
+                registrations += 1
+                (registrations == 1 ? first : restored).fulfill()
+                return (200, "{\"registered\":true}", 0)
+            }
+            if request.url!.path.hasSuffix("/invalidate-token") {
+                invalidations += 1
+                (invalidations == 1 ? revoked : duplicate).fulfill()
+            }
+            return Self.defaultReply(request)
+        }
+        let queue = DispatchQueue(label: "consent-push-test")
+        let registrar = PushRegistrar(apiClient: runtime.apiClient, identity: runtime.identityStore,
+            consent: runtime.consentStore, logger: runtime.logger, queue: queue,
+            environment: "sandbox", secure: secure)
+        registrar.permissionStatus = { $0(false) }
+        registrar.register(token: "retained-device")
+        wait(for: [first], timeout: 2)
+        runtime.consentStore.update(Consent(push: false))
+        queue.async { registrar.retryRegistration() }
+        wait(for: [revoked], timeout: 2)
+        XCTAssertEqual(secure.read(.pushToken), Data("retained-device".utf8))
+        queue.async { registrar.retryRegistration(); registrar.retryRegistration() }
+        wait(for: [duplicate], timeout: 0.2)
+        runtime.consentStore.update(Consent(push: true))
+        queue.async { registrar.retryRegistration() }
+        wait(for: [restored], timeout: 2)
+        XCTAssertEqual(registrations, 2)
+        XCTAssertEqual(invalidations, 1)
+        XCTAssertEqual(secure.read(.pushToken), Data("retained-device".utf8))
     }
 
     private static func defaultReply(_ request: URLRequest) -> (Int, String, TimeInterval) {

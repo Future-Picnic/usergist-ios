@@ -58,6 +58,9 @@ final class PromptPresenter {
                     release()
                 }
             }
+            if let window = top.view.window {
+                view.layoutHint = (window.bounds.size, window.safeAreaInsets)
+            }
             container = BottomSheetController(promptView: view, theme: theme)
             self.currentController = container
             self.releaseCurrent = release

@@ -12,6 +12,8 @@ struct SurveyAttempt: Codable, Sendable, Equatable {
     var answers: [String: SurveyAnswerValue]
     var currentQuestionId: String?
     let startedAt: Date
+    // Optional for compatibility with snapshots written by earlier SDK builds.
+    var locallyEditedQuestionIds: Set<String>? = nil
 }
 
 final class SurveyStore {
@@ -50,7 +52,8 @@ final class SurveyStore {
         }
     }
 
-    /// Persists the server-authoritative attempt returned by create/resume.
+    /// Keeps the server-authoritative attempt ID while preserving this device's
+    /// edited answers if an interrupted progress request left the server behind.
     /// The API owns attempt ids; native code must never invent one locally.
     func upsert(
         surveyId: String,
@@ -59,12 +62,19 @@ final class SurveyStore {
         currentQuestionId: String?
     ) -> SurveyAttempt {
         queue.sync {
+            let local = attempts[surveyId].flatMap { $0.attemptId == attemptId ? $0 : nil }
+            let edited = local?.locallyEditedQuestionIds ?? []
+            var merged = answers
+            for id in edited {
+                if let value = local?.answers[id] { merged[id] = value }
+            }
             let attempt = SurveyAttempt(
                 attemptId: attemptId,
                 surveyId: surveyId,
-                answers: answers,
-                currentQuestionId: currentQuestionId,
-                startedAt: attempts[surveyId]?.startedAt ?? Date()
+                answers: merged,
+                currentQuestionId: edited.isEmpty ? currentQuestionId : local?.currentQuestionId,
+                startedAt: local?.startedAt ?? Date(),
+                locallyEditedQuestionIds: edited.isEmpty ? nil : edited
             )
             attempts[surveyId] = attempt
             persistLocked()
@@ -77,6 +87,8 @@ final class SurveyStore {
         queue.sync {
             guard var attempt = attempts[surveyId] else { return }
             attempt.answers[questionId] = value
+            if attempt.locallyEditedQuestionIds == nil { attempt.locallyEditedQuestionIds = [] }
+            attempt.locallyEditedQuestionIds?.insert(questionId)
             attempt.currentQuestionId = nextQuestionId
             attempts[surveyId] = attempt
             persistLocked()

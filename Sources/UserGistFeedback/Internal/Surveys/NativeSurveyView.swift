@@ -8,6 +8,8 @@ final class NativeSurveyViewModel: ObservableObject {
     @Published var isComplete = false
     @Published var isSubmitting = false
     @Published var errorMessage: String?
+    /// True after completion delivery failed; the error offers "Try again".
+    @Published private(set) var canRetrySubmit = false
     @Published private(set) var history: [String] = []
 
     let flow: SurveyFlow
@@ -53,7 +55,17 @@ final class NativeSurveyViewModel: ObservableObject {
         flow.questions.firstIndex { $0.id == currentQuestionId } ?? 0
     }
 
+    var progress: Double {
+        BranchEvaluator.estimateProgress(flow: flow, currentQuestionId: currentQuestionId)
+    }
+
     var canGoBack: Bool { flow.backNavigation && !history.isEmpty }
+
+    /// Last step of the current branch: the main action reads "Submit".
+    var isFinalQuestion: Bool {
+        guard let question = currentQuestion else { return false }
+        return BranchEvaluator.nextQuestionId(flow: flow, currentQuestionId: question.id, answers: answers) == nil
+    }
 
     var canAdvanceCurrentQuestion: Bool {
         guard let question = currentQuestion else { return false }
@@ -67,6 +79,7 @@ final class NativeSurveyViewModel: ObservableObject {
         guard let question = currentQuestion else { return }
         answers[question.id] = value
         errorMessage = nil
+        canRetrySubmit = false
         if autoAdvance {
             advance()
         } else {
@@ -91,6 +104,7 @@ final class NativeSurveyViewModel: ObservableObject {
             return
         }
         errorMessage = nil
+        canRetrySubmit = false
         let next = BranchEvaluator.nextQuestionId(
             flow: flow,
             currentQuestionId: question.id,
@@ -113,9 +127,10 @@ final class NativeSurveyViewModel: ObservableObject {
     }
 
     func goBack() {
-        guard canGoBack, let previous = history.popLast() else { return }
+        guard canGoBack, !isSubmitting, let previous = history.popLast() else { return }
         currentQuestionId = previous
         errorMessage = nil
+        canRetrySubmit = false
         onProgress(attemptId, previous, answers)
     }
 
@@ -130,6 +145,7 @@ final class NativeSurveyViewModel: ObservableObject {
                     self.currentQuestionId = nil
                 } else {
                     self.errorMessage = "Your answers are saved on this device. Reconnect and retry to finish."
+                    self.canRetrySubmit = true
                 }
             }
         }
@@ -169,6 +185,31 @@ final class NativeSurveyViewModel: ObservableObject {
     }
 }
 
+/// Where the survey's navigation controls live. Orientation-independent:
+/// portrait and landscape share one rule. Leading/trailing follow the
+/// layout direction (SwiftUI mirrors them in RTL).
+struct SurveyNavigationLayout: Equatable {
+    enum Slot: Equatable { case back, close, empty }
+    enum Footer: Equatable { case next, endAction, none }
+
+    let leading: Slot
+    let trailing: Slot
+    let footer: Footer
+
+    init(canGoBack: Bool, isComplete: Bool, needsNext: Bool) {
+        let showBack = canGoBack && !isComplete
+        leading = showBack ? .back : .close
+        trailing = showBack ? .close : .empty
+        footer = isComplete ? .endAction : (needsNext ? .next : .none)
+    }
+}
+
+// PORTED FROM: packages/sdk-react-native/src/ui/SurveyView.tsx
+//
+// Full-screen survey. Header: Back leading + Close trailing when Back is
+// usable, otherwise Close leading; progress centred. Next/Submit (or the
+// end-screen action) is one full-width footer action in both orientations,
+// outside the scroll and above the keyboard.
 @available(iOS 14.0, *)
 struct NativeSurveyView: View {
     @ObservedObject var viewModel: NativeSurveyViewModel
@@ -179,70 +220,35 @@ struct NativeSurveyView: View {
 
     @State private var confirmingAbandon = false
     @State private var abandoning = false
+    /// Scroll anchor of the focused answer field; drives `FocusedFieldReveal`.
+    @State private var focusedAnswer: String?
+    @StateObject private var keyboard = KeyboardVisibility()
+
+    static func answerAnchor(_ questionId: String) -> String { "answer-\(questionId)" }
+    @SwiftUI.Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            progress
-            Group {
-                if viewModel.isComplete {
-                    completionView
-                } else if let question = viewModel.currentQuestion {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
-                            if let imageUrl = question.imageUrl,
-                               let url = URL(string: imageUrl) {
-                                RemoteSurveyImage(url: url, radius: theme.radius)
-                            }
-                            Text(question.title)
-                                .font(Font(theme.titleFont))
-                                .foregroundColor(Color(theme.text))
-                                .multilineTextAlignment(
-                                    question.type == .rating ? .center : .leading
-                                )
-                                .frame(
-                                    maxWidth: .infinity,
-                                    alignment: question.type == .rating ? .center : .leading
-                                )
-                                .fixedSize(horizontal: false, vertical: true)
-                            if let subtitle = question.subtitle, !subtitle.isEmpty {
-                                Text(subtitle)
-                                    .font(Font(theme.font))
-                                    .foregroundColor(Color(theme.subtext))
-                                    .multilineTextAlignment(
-                                        question.type == .rating ? .center : .leading
-                                    )
-                                    .frame(
-                                        maxWidth: .infinity,
-                                        alignment: question.type == .rating ? .center : .leading
-                                    )
-                            }
-                            questionInput(question)
-                            if let error = viewModel.errorMessage {
-                                Text(error)
-                                    .font(.footnote)
-                                    .foregroundColor(Color(UIColor.systemRed))
-                                    .accessibilityLabel("Error: \(error)")
-                            }
-                            if needsNextButton(question) {
-                                primaryButton(
-                                    title: viewModel.isSubmitting ? "Submitting…" :
-                                        (question.type == .infoScreen ? "Continue" : "Next"),
-                                    disabled: viewModel.isSubmitting ||
-                                        !viewModel.canAdvanceCurrentQuestion,
-                                    action: viewModel.advance
-                                )
-                            }
-                        }
-                        .frame(maxWidth: 560, alignment: .leading)
+        GeometryReader { geometry in
+            let landscape = geometry.size.width > geometry.size.height
+            VStack(spacing: 0) {
+                header()
+                    .padding(.horizontal, 12)
+                    .padding(.top, landscape ? 8 : 4)
+                    .padding(.bottom, 4)
+                // NPS layout follows the content column (560pt cap, 24pt
+                // side padding), not the window — same rule as the sheet.
+                content(landscape: landscape, wide: NpsQuestionView.isWide(
+                    contentWidth: min(max(0, geometry.size.width - 48), SurfaceMetrics.contentMaxWidth)))
+                // Outside the scroll, inside the keyboard-adjusted safe area:
+                // the footer rides above the keyboard in both orientations,
+                // centred in the same readable column as the question.
+                if let footer = footerActions {
+                    footer
+                        .frame(maxWidth: SurfaceMetrics.contentMaxWidth)
                         .padding(.horizontal, 24)
-                        .padding(.vertical, 28)
+                        .padding(.top, landscape ? 6 : 8)
+                        .padding(.bottom, max(8, 16 - geometry.safeAreaInsets.bottom))
                         .frame(maxWidth: .infinity)
-                    }
-                } else {
-                    Text("This survey is unavailable.")
-                        .foregroundColor(Color(theme.text))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
@@ -267,135 +273,230 @@ struct NativeSurveyView: View {
         }
     }
 
-    private var header: some View {
-        HStack {
-            Button(action: viewModel.goBack) {
-                Image(systemName: "chevron.left")
-                    .frame(width: 44, height: 44)
+    // MARK: Header and actions
+
+    private var navigation: SurveyNavigationLayout {
+        SurveyNavigationLayout(
+            canGoBack: viewModel.canGoBack,
+            isComplete: viewModel.isComplete,
+            needsNext: viewModel.currentQuestion.map(needsNextButton) ?? false
+        )
+    }
+
+    /// With a usable Back: Back leading, Close trailing. Without Back
+    /// (first question, history empty, end screen): Close leading, trailing empty.
+    private func header() -> some View {
+        let layout = navigation
+        return SurfaceHeaderBar(
+            leading: {
+                if layout.leading == .back { backButton } else { closeButton }
+            },
+            center: { progress.frame(maxWidth: 320).padding(.horizontal, 8) },
+            trailing: {
+                if layout.trailing == .close { closeButton }
             }
-            .disabled(!viewModel.canGoBack)
-            .opacity(viewModel.canGoBack ? 1 : 0)
-            .accessibilityLabel("Back")
-            Spacer()
-            Button(action: {
-                if viewModel.isComplete { onClose() }
-                else { confirmingAbandon = true }
-            }) {
-                Image(systemName: "xmark")
-                    .frame(width: 44, height: 44)
-            }
-            .disabled(abandoning)
-            .accessibilityLabel("Close survey")
+        )
+    }
+
+    private var closeButton: some View {
+        SurfaceIconView(glyph: .close, color: theme.text, label: "Close survey") {
+            if viewModel.isComplete { onClose() } else { confirmingAbandon = true }
         }
-        .foregroundColor(Color(theme.text))
-        .padding(.horizontal, 12)
-        .frame(minHeight: 56)
+        .disabled(abandoning)
+    }
+
+    /// Back stays in place (disabled) while submitting so Close does not jump
+    /// sides mid-request; `goBack` already refuses while submitting.
+    private var backButton: some View {
+        SurfaceIconView(glyph: .back, color: theme.text, label: "Back", action: viewModel.goBack)
+            .disabled(viewModel.isSubmitting)
+    }
+
+    private var nextButton: some View {
+        SurfacePrimaryButtonView(
+            title: viewModel.isFinalQuestion ? "Submit" : "Next",
+            theme: theme,
+            disabled: !viewModel.canAdvanceCurrentQuestion,
+            loading: viewModel.isSubmitting,
+            compact: false,
+            fillWidth: true,
+            action: viewModel.advance
+        )
+    }
+
+    private var endAction: some View {
+        SurfacePrimaryButtonView(title: endScreen?.cta?.label ?? "Done", theme: theme,
+                                 compact: false, fillWidth: true, action: openEndAction)
+    }
+
+    /// Footer in both orientations: one full-width Next/Submit, or the
+    /// end-screen action. Back never lives here; it is in the header.
+    private var footerActions: AnyView? {
+        switch navigation.footer {
+        case .endAction: return AnyView(endAction)
+        case .next: return AnyView(nextButton)
+        case .none: return nil
+        }
     }
 
     @ViewBuilder private var progress: some View {
         if !viewModel.isComplete && viewModel.flow.progressStyle == "bar" {
-            GeometryReader { geometry in
+            GeometryReader { bar in
                 ZStack(alignment: .leading) {
-                    Color(theme.border)
-                    Color(theme.primary).frame(
-                        width: geometry.size.width * progressFraction
-                    )
+                    Capsule().fill(Color(theme.fillStrong))
+                    Capsule().fill(Color(theme.primary))
+                        .frame(width: bar.size.width * CGFloat(min(max(viewModel.progress, 0), 1)))
                 }
             }
-            .frame(height: 4)
-            .accessibilityLabel("Survey progress")
-            .accessibilityValue("Question \(viewModel.questionIndex + 1) of \(viewModel.flow.questions.count)")
+            .frame(height: 6)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Survey progress"))
+            .accessibility(value: Text("\(Int((viewModel.progress * 100).rounded())) percent"))
         } else if !viewModel.isComplete && viewModel.flow.progressStyle == "dots" {
             HStack(spacing: 6) {
                 ForEach(viewModel.flow.questions.indices, id: \.self) { index in
-                    Circle()
-                        .fill(Color(index <= viewModel.questionIndex ? theme.primary : theme.border))
-                        .frame(width: 8, height: 8)
+                    Capsule()
+                        .fill(Color(index <= viewModel.questionIndex ? theme.primary : theme.fillStrong))
+                        .frame(width: index == viewModel.questionIndex ? 18 : 6, height: 6)
                 }
             }
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Question \(viewModel.questionIndex + 1) of \(viewModel.flow.questions.count)")
+            .accessibilityLabel(Text("Question \(viewModel.questionIndex + 1) of \(viewModel.flow.questions.count)"))
         }
     }
 
-    private var completionView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 56))
-                .foregroundColor(Color(theme.primary))
-                .accessibilityHidden(true)
-            Text(endScreen?.headline ?? "Thanks for your feedback")
-                .font(Font(theme.titleFont))
-                .foregroundColor(Color(theme.text))
-                .multilineTextAlignment(.center)
-            if let body = endScreen?.body, !body.isEmpty {
-                Text(body)
-                    .font(Font(theme.font))
-                    .foregroundColor(Color(theme.subtext))
-                    .multilineTextAlignment(.center)
+    // MARK: Content
+
+    /// Short landscape + keyboard leaves a tiny scroll viewport. When the
+    /// answer field is focused (or the keyboard settles/resizes), scroll the
+    /// field to the top so its first line shows above the footer; the
+    /// question title may scroll away. Same helper as the request composer.
+    private func content(landscape: Bool, wide: Bool) -> some View {
+        GeometryReader { viewport in
+            ScrollViewReader { proxy in
+                scrollContent(landscape: landscape, wide: wide, viewportHeight: viewport.size.height)
+                    // Not animated: an animated scrollTo was dropped in the
+                    // short-landscape test (offset stayed 0); the jump rides
+                    // the keyboard's own animation.
+                    .onChange(of: focusedAnswer) {
+                        FocusedFieldReveal.reveal($0, in: proxy, reduceMotion: true)
+                    }
+                    .onChange(of: keyboard.settledFrames) { _ in
+                        FocusedFieldReveal.reveal(focusedAnswer, in: proxy, reduceMotion: true)
+                    }
             }
-            primaryButton(
-                title: endScreen?.cta?.label ?? "Close",
-                disabled: false,
-                action: openEndAction
-            )
-            .frame(maxWidth: 320)
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: viewModel.currentQuestionId)
+        .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.62), value: viewModel.isComplete)
+    }
+
+    private func scrollContent(landscape: Bool, wide: Bool, viewportHeight: CGFloat) -> some View {
+            ScrollView {
+                Group {
+                    if viewModel.isComplete {
+                        SurveyEndScreenView(screen: endScreen, theme: theme)
+                            .transition(reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
+                    } else if let question = viewModel.currentQuestion {
+                        questionBlock(question, wide: wide)
+                            .id(question.id)
+                            .transition(reduceMotion ? .opacity : .asymmetric(
+                                insertion: AnyTransition.offset(x: 36).combined(with: .opacity),
+                                removal: .opacity))
+                    } else {
+                        Text("This survey is unavailable.")
+                            .font(Font(theme.surfaceFont(16)))
+                            .foregroundColor(Color(theme.text))
+                    }
+                }
+                .frame(maxWidth: SurfaceMetrics.contentMaxWidth, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.top, landscape ? 8 : 24)
+                .padding(.bottom, landscape ? 24 : 40)
+                .frame(maxWidth: .infinity, minHeight: viewportHeight,
+                       alignment: viewModel.isComplete ? .center : .top)
+            }
+    }
+
+    private func questionBlock(_ question: SurveyQuestion, wide: Bool) -> some View {
+        let centered = question.type == .rating || (question.type == .nps && wide)
+        return VStack(alignment: .leading, spacing: 0) {
+            SurfaceQuestionHeaderView(
+                title: question.title,
+                subtitle: subtitle(for: question),
+                imageURL: question.imageUrl.flatMap(URL.init(string:)),
+                theme: theme,
+                centered: centered
+            )
+            questionInput(question, wide: wide)
+            if let error = viewModel.errorMessage {
+                errorBox(error)
+            }
+        }
+    }
+
+    private func subtitle(for question: SurveyQuestion) -> String? {
+        if let subtitle = question.subtitle, !subtitle.isEmpty { return subtitle }
+        switch question.type {
+        case .multiChoice:
+            return question.maxSelections.map { "Choose up to \($0)" } ?? "Choose all that apply"
+        case .ranking: return "Most important first"
+        default: return nil
+        }
+    }
+
+    private func errorBox(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(message)
+                .font(Font(theme.surfaceFont(15)))
+                .foregroundColor(Color(theme.text))
+                .fixedSize(horizontal: false, vertical: true)
+            if viewModel.canRetrySubmit {
+                SurfaceSecondaryButtonView(title: "Try again", theme: theme, compact: true, fillWidth: false,
+                                           action: viewModel.advance)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: theme.cappedRadius(14)).fill(Color(theme.fill)))
+        .padding(.top, 20)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("Error: \(message)"))
     }
 
     @ViewBuilder
-    private func questionInput(_ question: SurveyQuestion) -> some View {
+    private func questionInput(_ question: SurveyQuestion, wide: Bool) -> some View {
         switch question.type {
         case .singleChoice:
-            ChoiceList(
-                choices: question.options ?? [],
-                selected: selectedStrings(question.id),
-                multiple: false,
-                maximum: 1,
-                theme: theme
-            ) { values in
+            SurveyChoiceList(choices: question.options ?? [], selected: selectedStrings(question.id),
+                             multiple: false, maximum: 1, theme: theme) { values in
                 if let first = values.first { viewModel.select(.string(first), autoAdvance: true) }
             }
         case .multiChoice:
-            ChoiceList(
-                choices: question.options ?? [],
-                selected: selectedStrings(question.id),
-                multiple: true,
-                maximum: question.maxSelections,
-                theme: theme
-            ) { viewModel.select(.stringArray($0), autoAdvance: false) }
+            SurveyChoiceList(choices: question.options ?? [], selected: selectedStrings(question.id),
+                             multiple: true, maximum: question.maxSelections, theme: theme) {
+                viewModel.select(.stringArray($0), autoAdvance: false)
+            }
         case .rating:
             SurveyRatingInput(
                 question: question,
                 selected: selectedInt(question.id),
                 theme: theme,
                 onSelect: { viewModel.select(.int($0), autoAdvance: false) },
-                onAutoAdvance: {
-                    viewModel.advance(ifCurrentQuestionId: question.id)
-                }
+                onAutoAdvance: { viewModel.advance(ifCurrentQuestionId: question.id) }
             )
             .frame(height: SurveyRatingInput.preferredHeight(for: question))
         case .nps:
-            ScoreGrid(
-                range: 0...10,
-                selected: selectedInt(question.id),
-                lowLabel: question.lowLabel,
-                highLabel: question.highLabel,
-                theme: theme
-            ) { viewModel.select(.int($0), autoAdvance: true) }
+            SurveyNpsScale(selected: selectedInt(question.id), lowLabel: question.lowLabel,
+                           highLabel: question.highLabel, wide: wide, theme: theme) {
+                viewModel.select(.int($0), autoAdvance: true)
+            }
         case .likert:
-            ChoiceList(
+            SurveyChoiceList(
                 choices: (question.labels ?? [
                     "Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"
                 ]).enumerated().map { SurveyChoice(id: String($0.offset + 1), label: $0.element) },
                 selected: selectedInt(question.id).map { [String($0)] } ?? [],
-                multiple: false,
-                maximum: 1,
-                theme: theme
+                multiple: false, maximum: 1, theme: theme
             ) { values in
                 if let score = values.first.flatMap(Int.init) {
                     viewModel.select(.int(score), autoAdvance: true)
@@ -408,44 +509,29 @@ struct NativeSurveyView: View {
                 placeholder: question.placeholder ?? "",
                 longForm: question.type == .longText,
                 maxLength: question.maxLength,
-                theme: theme
+                theme: theme,
+                onFocusChange: { focused in
+                    let anchor = Self.answerAnchor(question.id)
+                    if focused { focusedAnswer = anchor } else if focusedAnswer == anchor { focusedAnswer = nil }
+                }
             ) { viewModel.select(.string($0), autoAdvance: false) }
+            .id(Self.answerAnchor(question.id))
         case .ranking:
-            SurveyRankingInput(
-                items: question.items ?? [],
-                savedOrder: selectedStrings(question.id),
-                theme: theme
-            ) { viewModel.select(.stringArray($0), autoAdvance: false) }
+            SurveyRankingInput(items: question.items ?? [], savedOrder: selectedStrings(question.id),
+                               theme: theme) { viewModel.select(.stringArray($0), autoAdvance: false) }
         case .singleDate:
-            SurveyDateInput(
-                initial: selectedText(question.id),
-                minimum: question.minDate,
-                maximum: question.maxDate,
-                theme: theme
-            ) { viewModel.select(.string($0), autoAdvance: false) }
+            SurveyDateInput(initial: selectedText(question.id), minimum: question.minDate,
+                            maximum: question.maxDate, theme: theme) {
+                viewModel.select(.string($0), autoAdvance: false)
+            }
         case .infoScreen:
             Text(question.body ?? "")
-                .font(Font(theme.font))
+                .font(Font(theme.surfaceFont(16)))
+                .lineSpacing(6)
                 .foregroundColor(Color(theme.subtext))
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, -4)
         }
-    }
-
-    private func primaryButton(
-        title: String,
-        disabled: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(Font(theme.boldFont))
-                .frame(maxWidth: .infinity, minHeight: 52)
-        }
-        .buttonStyle(SurveyPrimaryButtonStyle())
-        .foregroundColor(Color.white)
-        .background(Color(theme.primary).opacity(disabled ? 0.4 : 1))
-        .clipShape(Capsule())
-        .disabled(disabled)
     }
 
     private func needsNextButton(_ question: SurveyQuestion) -> Bool {
@@ -453,11 +539,6 @@ struct NativeSurveyView: View {
         case .singleChoice, .rating, .nps, .likert: return false
         default: return true
         }
-    }
-
-    private var progressFraction: CGFloat {
-        let total = max(viewModel.flow.questions.count, 1)
-        return CGFloat(viewModel.questionIndex + 1) / CGFloat(total)
     }
 
     private func selectedStrings(_ id: String) -> [String] {
@@ -486,421 +567,5 @@ struct NativeSurveyView: View {
             UIApplication.shared.open(url)
         }
         onClose()
-    }
-}
-
-@available(iOS 14.0, *)
-private struct SurveyPrimaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.opacity(configuration.isPressed ? 0.85 : 1)
-    }
-}
-
-@available(iOS 14.0, *)
-private struct ChoiceList: View {
-    let choices: [SurveyChoice]
-    let selected: [String]
-    let multiple: Bool
-    let maximum: Int?
-    let theme: ResolvedTheme
-    let onChange: ([String]) -> Void
-
-    var body: some View {
-        VStack(spacing: 8) {
-            ForEach(choices, id: \.id) { choice in
-                let active = selected.contains(choice.id)
-                Button(action: { toggle(choice.id) }) {
-                    HStack {
-                        Image(systemName: multiple
-                            ? (active ? "checkmark.square.fill" : "square")
-                            : (active ? "largecircle.fill.circle" : "circle"))
-                        Text(choice.label)
-                            .font(Font(theme.font))
-                        Spacer()
-                    }
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: 48)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(PlainButtonStyle())
-                .foregroundColor(active ? Color(theme.primary) : Color(theme.text))
-                .background(active ? Color(theme.primary).opacity(0.10) : Color.clear)
-                .overlay(
-                    RoundedRectangle(cornerRadius: min(theme.radius, 14))
-                        .stroke(active ? Color(theme.primary) : Color(theme.border), lineWidth: 1)
-                )
-                .cornerRadius(min(theme.radius, 14))
-                .accessibilityAddTraits(active ? .isSelected : [])
-            }
-        }
-    }
-
-    private func toggle(_ id: String) {
-        if !multiple {
-            onChange([id])
-            return
-        }
-        var next = selected
-        if let index = next.firstIndex(of: id) {
-            next.remove(at: index)
-        } else if maximum == nil || next.count < maximum! {
-            next.append(id)
-        }
-        onChange(next)
-    }
-}
-
-@available(iOS 14.0, *)
-private struct ScoreGrid: View {
-    let range: ClosedRange<Int>
-    let selected: Int?
-    let lowLabel: String?
-    let highLabel: String?
-    let theme: ResolvedTheme
-    let onSelect: (Int) -> Void
-
-    private let columns = [GridItem(.adaptive(minimum: 48), spacing: 8)]
-
-    var body: some View {
-        VStack(spacing: 8) {
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(Array(range), id: \.self) { score in
-                    Button(action: { onSelect(score) }) {
-                        Text(String(score))
-                            .font(Font(theme.boldFont))
-                            .frame(maxWidth: .infinity, minHeight: 48)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .foregroundColor(selected == score
-                        ? theme.primary.userGistContrastColor
-                        : Color(theme.text))
-                    .background(selected == score ? Color(theme.primary) : Color.clear)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: min(theme.radius, 12))
-                            .stroke(Color(theme.border), lineWidth: selected == score ? 0 : 1)
-                    )
-                    .cornerRadius(min(theme.radius, 12))
-                }
-            }
-            if lowLabel != nil || highLabel != nil {
-                HStack {
-                    Text(lowLabel ?? "")
-                    Spacer()
-                    Text(highLabel ?? "")
-                }
-                .font(.caption)
-                .foregroundColor(Color(theme.subtext))
-            }
-        }
-    }
-}
-
-@available(iOS 14.0, *)
-struct SurveyTextInput: View {
-    @State private var value: String
-    let accessibilityLabel: String
-    let placeholder: String
-    let longForm: Bool
-    let maxLength: Int?
-    let theme: ResolvedTheme
-    let onChange: (String) -> Void
-
-    init(
-        initial: String,
-        accessibilityLabel: String,
-        placeholder: String,
-        longForm: Bool,
-        maxLength: Int?,
-        theme: ResolvedTheme,
-        onChange: @escaping (String) -> Void
-    ) {
-        _value = State(initialValue: initial)
-        self.accessibilityLabel = accessibilityLabel
-        self.placeholder = placeholder
-        self.longForm = longForm
-        self.maxLength = maxLength.flatMap { $0 > 0 ? $0 : nil }
-        self.theme = theme
-        self.onChange = onChange
-    }
-
-    var body: some View {
-        VStack(alignment: .trailing, spacing: 4) {
-            ZStack(alignment: .topLeading) {
-                SurveyUIKitTextView(
-                    text: binding,
-                    accessibilityLabel: accessibilityLabel,
-                    theme: theme
-                )
-                if value.isEmpty && !placeholder.isEmpty {
-                    Text(placeholder)
-                        .font(Font(theme.font))
-                        .foregroundColor(Color(theme.subtext))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-            }
-            .frame(height: longForm ? 120 : 100)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color(theme.border), lineWidth: 1)
-            )
-            if longForm, let maxLength {
-                Text(verbatim: "\(value.count) / \(maxLength)")
-                    .font(.caption)
-                    .foregroundColor(Color(theme.subtext))
-                    .accessibilityIdentifier("survey-text-counter")
-            }
-        }
-        .font(Font(theme.font))
-        .foregroundColor(Color(theme.text))
-    }
-
-    private var binding: Binding<String> {
-        Binding(
-            get: { value },
-            set: { next in
-                let clipped = Self.limitedText(next, maxLength: maxLength)
-                value = clipped
-                onChange(clipped)
-            }
-        )
-    }
-
-    static func limitedText(_ text: String, maxLength: Int?) -> String {
-        guard let maxLength, maxLength > 0 else { return text }
-        return String(text.prefix(maxLength))
-    }
-}
-
-@available(iOS 14.0, *)
-private struct SurveyUIKitTextView: UIViewRepresentable {
-    @Binding var text: String
-    let accessibilityLabel: String
-    let theme: ResolvedTheme
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
-    }
-
-    func makeUIView(context: Context) -> UITextView {
-        let view = UITextView()
-        view.delegate = context.coordinator
-        view.backgroundColor = .clear
-        view.textContainerInset = UIEdgeInsets(top: 8, left: 7, bottom: 8, right: 7)
-        view.textContainer.lineFragmentPadding = 5
-        view.isScrollEnabled = true
-        return view
-    }
-
-    func updateUIView(_ view: UITextView, context: Context) {
-        if view.text != text { view.text = text }
-        view.backgroundColor = .clear
-        view.font = theme.font
-        view.textColor = theme.text
-        view.tintColor = theme.primary
-        view.accessibilityLabel = accessibilityLabel
-    }
-
-    final class Coordinator: NSObject, UITextViewDelegate {
-        @Binding private var text: String
-
-        init(text: Binding<String>) {
-            _text = text
-        }
-
-        func textViewDidChange(_ textView: UITextView) {
-            text = textView.text
-        }
-    }
-}
-
-@available(iOS 14.0, *)
-struct SurveyRankingInput: View {
-    @State private var ordered: [SurveyChoice]
-    let theme: ResolvedTheme
-    let onChange: ([String]) -> Void
-
-    init(
-        items: [SurveyChoice],
-        savedOrder: [String],
-        theme: ResolvedTheme,
-        onChange: @escaping ([String]) -> Void
-    ) {
-        _ordered = State(initialValue: Self.restoredItems(items, savedOrder: savedOrder))
-        self.theme = theme
-        self.onChange = onChange
-    }
-
-    static func restoredItems(_ items: [SurveyChoice], savedOrder: [String]) -> [SurveyChoice] {
-        var seen = Set<String>()
-        let unique = items.filter { !$0.id.isEmpty && seen.insert($0.id).inserted }
-        let byId = Dictionary(uniqueKeysWithValues: unique.map { ($0.id, $0) })
-        seen.removeAll()
-        let restored = savedOrder.compactMap { id -> SurveyChoice? in
-            guard seen.insert(id).inserted else { return nil }
-            return byId[id]
-        }
-        return restored + unique.filter { !seen.contains($0.id) }
-    }
-
-    var body: some View {
-        VStack(spacing: 8) {
-            ForEach(Array(ordered.enumerated()), id: \.element.id) { index, item in
-                HStack {
-                    Text("\(index + 1).")
-                        .foregroundColor(Color(theme.subtext))
-                    Text(item.label)
-                        .foregroundColor(Color(theme.text))
-                    Spacer()
-                    moveButton("chevron.up", disabled: index == 0) { move(index, -1) }
-                    moveButton("chevron.down", disabled: index == ordered.count - 1) { move(index, 1) }
-                }
-                .font(Font(theme.font))
-                .padding(.horizontal, 12)
-                .frame(minHeight: 52)
-                .overlay(
-                    RoundedRectangle(cornerRadius: min(theme.radius, 12))
-                        .stroke(Color(theme.border), lineWidth: 1)
-                )
-            }
-        }
-        .onAppear { onChange(ordered.map(\.id)) }
-    }
-
-    private func moveButton(
-        _ systemName: String,
-        disabled: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName).frame(width: 44, height: 44)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .foregroundColor(disabled ? Color(theme.border) : Color(theme.primary))
-        .disabled(disabled)
-    }
-
-    private func move(_ index: Int, _ delta: Int) {
-        let destination = index + delta
-        guard ordered.indices.contains(index), ordered.indices.contains(destination) else { return }
-        ordered.swapAt(index, destination)
-        onChange(ordered.map(\.id))
-    }
-}
-
-@available(iOS 14.0, *)
-struct SurveyDateInput: View {
-    @State private var selected: Date
-    let minimum: Date
-    let maximum: Date
-    let theme: ResolvedTheme
-    let onChange: (String) -> Void
-
-    init(
-        initial: String,
-        minimum: String?,
-        maximum: String?,
-        theme: ResolvedTheme,
-        onChange: @escaping (String) -> Void
-    ) {
-        let formatter = Self.formatter
-        let lower = minimum.flatMap(formatter.date) ?? Date(timeIntervalSince1970: -2208988800)
-        let upper = maximum.flatMap(formatter.date) ?? Date(timeIntervalSince1970: 4133894400)
-        // DatePicker requires an ordered closed range, including for malformed
-        // server data or stale cached limits. Never construct a reversed range.
-        let min = Swift.min(lower, upper)
-        let max = Swift.max(lower, upper)
-        let current = initial.isEmpty ? Date() : (formatter.date(from: initial) ?? Date())
-        _selected = State(initialValue: Swift.max(min, Swift.min(current, max)))
-        self.minimum = min
-        self.maximum = max
-        self.theme = theme
-        self.onChange = onChange
-    }
-
-    var body: some View {
-        DatePicker(
-            "Date",
-            selection: Binding(
-                get: { selected },
-                set: {
-                    selected = $0
-                    onChange(Self.formatter.string(from: $0))
-                }
-            ),
-            in: minimum...maximum,
-            displayedComponents: .date
-        )
-        .font(Font(theme.font))
-        .foregroundColor(Color(theme.text))
-    }
-
-    private static let formatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-}
-
-@available(iOS 14.0, *)
-private final class SurveyImageLoader: ObservableObject {
-    @Published var image: UIImage?
-    private var task: URLSessionDataTask?
-
-    func load(_ url: URL) {
-        task?.cancel()
-        task = URLSession.shared.dataTask(with: url) { [weak self] data, response, _ in
-            guard let http = response as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode),
-                  http.expectedContentLength <= 10 * 1_024 * 1_024,
-                  let data, data.count <= 10 * 1_024 * 1_024,
-                  let image = UIImage(data: data)
-            else { return }
-            DispatchQueue.main.async { self?.image = image }
-        }
-        task?.resume()
-    }
-
-    deinit { task?.cancel() }
-}
-
-@available(iOS 14.0, *)
-private struct RemoteSurveyImage: View {
-    let url: URL
-    let radius: CGFloat
-    @StateObject private var loader = SurveyImageLoader()
-
-    var body: some View {
-        Group {
-            if let image = loader.image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Color(UIColor.secondarySystemBackground)
-                    .overlay(ProgressView())
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 220)
-        .clipped()
-        .cornerRadius(radius)
-        .accessibilityHidden(true)
-        .onAppear { loader.load(url) }
-    }
-}
-
-private extension UIColor {
-    var userGistContrastColor: Color {
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
-        getRed(&red, green: &green, blue: &blue, alpha: nil)
-        let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-        return luminance < 0.45 ? .white : .black
     }
 }

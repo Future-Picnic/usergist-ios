@@ -7,6 +7,16 @@ import Foundation
 
 extension Runtime {
 
+    private func requestsAllowed<T>(writing: Bool, completion: (Result<T, Error>) -> Void) -> Bool {
+        let allowed = writing ? consentStore.current().feedback == true : consentStore.allowsTransport
+        guard allowed else {
+            completion(.failure(NSError(domain: "UserGist.Requests", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: writing ? "Feedback consent is required" : "Consent is required"])))
+            return false
+        }
+        return true
+    }
+
     func listRequests(
         options: GetRequestsOptions,
         completion: @escaping (Result<GetRequestsResult, Error>) -> Void
@@ -55,6 +65,7 @@ extension Runtime {
         requestId: String,
         completion: @escaping (Result<FeatureRequest, Error>) -> Void
     ) {
+        guard requestsAllowed(writing: false, completion: completion) else { return }
         let id = identityStore.current()
         apiClient.getRequest(
             requestId: requestId,
@@ -71,6 +82,7 @@ extension Runtime {
         description: String,
         completion: @escaping (Result<FeatureRequest, Error>) -> Void
     ) {
+        guard requestsAllowed(writing: true, completion: completion) else { return }
         let id = identityStore.current()
         apiClient.submitRequest(
             anonymousId: id.anonymousId,
@@ -96,6 +108,7 @@ extension Runtime {
         vote: Bool,
         completion: @escaping (Result<RequestVote, Error>) -> Void
     ) {
+        guard requestsAllowed(writing: true, completion: completion) else { return }
         let rollback = requestsCache.applyOptimisticVote(id: requestId, vote: vote)
         let id = identityStore.current()
         apiClient.voteOnRequest(
@@ -123,6 +136,7 @@ extension Runtime {
         follow: Bool,
         completion: @escaping (Result<RequestFollow, Error>) -> Void
     ) {
+        guard requestsAllowed(writing: true, completion: completion) else { return }
         let rollback = requestsCache.applyOptimisticFollow(id: requestId, follow: follow)
         let id = identityStore.current()
         apiClient.followRequest(
@@ -149,6 +163,7 @@ extension Runtime {
         requestId: String,
         completion: @escaping (Result<[RequestComment], Error>) -> Void
     ) {
+        guard consentStore.allowsTransport else { completion(.success([])); return }
         let id = identityStore.current()
         apiClient.getComments(
             requestId: requestId,
@@ -164,6 +179,7 @@ extension Runtime {
         body: String,
         completion: @escaping (Result<RequestComment, Error>) -> Void
     ) {
+        guard requestsAllowed(writing: true, completion: completion) else { return }
         let id = identityStore.current()
         apiClient.postComment(
             requestId: requestId,
@@ -181,6 +197,7 @@ extension Runtime {
         body: String,
         completion: @escaping (Result<RequestComment, Error>) -> Void
     ) {
+        guard requestsAllowed(writing: true, completion: completion) else { return }
         let id = identityStore.current()
         apiClient.editComment(
             requestId: requestId,
@@ -197,6 +214,7 @@ extension Runtime {
         commentId: String,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
+        guard requestsAllowed(writing: true, completion: completion) else { return }
         let id = identityStore.current()
         apiClient.deleteComment(
             requestId: requestId,
@@ -207,9 +225,19 @@ extension Runtime {
         }
     }
 
+    /// The app's global theme override, read on the runtime queue and
+    /// delivered on main. Requests layer the branding accent over it.
+    func readThemeOverrides(_ completion: @escaping (PromptTheme?) -> Void) {
+        work { [weak self] in
+            let overrides = self?.themeOverrides
+            DispatchQueue.main.async { completion(overrides) }
+        }
+    }
+
     func getRequestBranding(
         completion: @escaping (Result<RequestBranding, Error>) -> Void
     ) {
+        guard requestsAllowed(writing: false, completion: completion) else { return }
         apiClient.getRequestBranding { result in
             completion(result.mapError { $0 as Error })
         }

@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 /// Registers device tokens with the UserGist control plane. Idempotent —
 /// repeated calls with the same token are cheap.
@@ -12,11 +13,18 @@ final class PushRegistrar {
     private let secure: SecureStore
     var canRegister: (() -> Bool)?
     var onSubscriptionState: ((PushSubscriptionState) -> Void)?
+    var permissionStatus: (@escaping (Bool) -> Void) -> Void = { completion in
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            completion(settings.authorizationStatus == .denied)
+        }
+    }
     private var registrationAttempt: UUID?
     private var registeredIdentity: String?
     private var lastRegistrationAt: Date = .distantPast
 
     private var lastRegistered: String?
+    private var permissionDenied = false
+    private var deniedBinding: String?
     private var operations: [(@escaping () -> Void) -> Void] = []
     private var operationRunning = false
 
@@ -63,6 +71,18 @@ final class PushRegistrar {
         queue.async { [weak self] in
             guard let self else { return }
             self.enqueue { done in
+                self.permissionStatus { denied in
+                    self.queue.async {
+                        self.registerQueued(token: token, automatic: automatic, requestedAlias: requestedAlias,
+                                            denied: denied, done: done)
+                    }
+                }
+            }
+        }
+    }
+
+    private func registerQueued(token: String, automatic: Bool, requestedAlias: String,
+                                denied: Bool, done: @escaping () -> Void) {
                 var awaitingResponse = false
                 defer { if !awaitingResponse { done() } }
                 guard requestedAlias == self.identity.anonymousId else { return }
@@ -70,14 +90,33 @@ final class PushRegistrar {
                 guard self.secure.read(.pushToken) == Data(token.utf8) || self.secure.write(.pushToken, Data(token.utf8)) else {
                     self.logger.warn("push registration could not be persisted"); return
                 }
-                guard self.consent.allowsPush else {
-                    self.emitState()
-                    self.logger.debug("push register skipped: consent not granted")
-                    return
-                }
-                guard self.canRegister?() != false else { self.emitState(); return }
                 let snap = self.identity.current()
                 let owner = snap.anonymousId + ":" + (snap.externalId ?? "")
+                self.permissionDenied = denied
+                // A consent withdrawal must revoke a previous binding, not
+                // merely skip the next registration. Retain the local token
+                // so a later grant can restore the current installation.
+                if denied || !self.consent.allowsPush {
+                    self.lastRegistered = nil
+                    self.registeredIdentity = nil
+                    self.emitState()
+                    let binding = owner + ":" + token
+                    if self.deniedBinding == binding { return }
+                    awaitingResponse = true
+                    self.apiClient.postVoid(path: SDKEndpoint.pushInvalidateToken,
+                        body: InvalidateTokenPayload(anonymousId: snap.anonymousId, token: token)) { result in
+                        self.queue.async {
+                            if case .success = result, self.identity.anonymousId == requestedAlias,
+                               self.secure.read(.pushToken) == Data(token.utf8) {
+                                self.deniedBinding = binding
+                            }
+                            done()
+                        }
+                    }
+                    return
+                }
+                self.deniedBinding = nil
+                guard self.canRegister?() != false else { self.emitState(); return }
                 if self.registrationAttempt != nil { return }
                 if self.lastRegistered == token && self.registeredIdentity == owner && Date().timeIntervalSince(self.lastRegistrationAt) < 86400 { return }
                 let attempt = UUID()
@@ -118,8 +157,6 @@ final class PushRegistrar {
                         self.emitState()
                     }
                 }
-            }
-        }
     }
 
     func invalidate(token: String) {
@@ -249,7 +286,7 @@ final class PushRegistrar {
         let snap = identity.current()
         onSubscriptionState?(PushSubscriptionState(tokenAvailable: secure.read(.pushToken) != nil,
             registered: consent.allowsPush && registeredIdentity == snap.anonymousId + ":" + (snap.externalId ?? "") && lastRegistered != nil,
-            optedIn: consent.allowsPush, anonymousId: snap.anonymousId, externalId: snap.externalId))
+            optedIn: consent.allowsPush && !permissionDenied, anonymousId: snap.anonymousId, externalId: snap.externalId))
     }
 
     func retryRegistration() {
@@ -258,6 +295,8 @@ final class PushRegistrar {
     }
 
     func reset() {
+        permissionDenied = false
+        deniedBinding = nil
         lastRegistered = nil
         registeredIdentity = nil
         registrationAttempt = nil

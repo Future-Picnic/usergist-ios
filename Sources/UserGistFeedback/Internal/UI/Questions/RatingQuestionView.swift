@@ -1,9 +1,12 @@
 import Foundation
 import UIKit
 
-/// Renders the dashboard-selected rating style. Stars are the wire default.
+/// Renders the dashboard-selected rating style (RN RatingQuestion). Stars are
+/// the wire default. The control is centred so preview and device match.
 final class RatingQuestionView: UIView, QuestionView {
     private static let emoji = ["😡", "😕", "😐", "🙂", "😍"]
+    static let controlSize: CGFloat = 48
+    static let rowSpacing: CGFloat = 8
 
     private let question: Question.Rating
     private let theme: ResolvedTheme
@@ -32,7 +35,7 @@ final class RatingQuestionView: UIView, QuestionView {
     private func buildUI() {
         stack.axis = .vertical
         stack.alignment = .center
-        stack.spacing = 8
+        stack.spacing = Self.rowSpacing
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
 
@@ -44,13 +47,14 @@ final class RatingQuestionView: UIView, QuestionView {
             stack.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
 
+        // Five per row keeps a 10-point scale centred and tappable on phones.
         let values = Array(1...scale)
-        let rowSize = values.count > 5 ? 5 : values.count
+        let rowSize = min(values.count, 5)
         for start in stride(from: 0, to: values.count, by: rowSize) {
             let row = UIStackView()
             row.axis = .horizontal
             row.alignment = .center
-            row.spacing = 8
+            row.spacing = Self.rowSpacing
             for value in values[start..<min(start + rowSize, values.count)] {
                 let button = makeButton(value: value)
                 buttons.append(button)
@@ -62,50 +66,42 @@ final class RatingQuestionView: UIView, QuestionView {
         if question.lowLabel != nil || question.highLabel != nil {
             let labels = UIStackView()
             labels.axis = .horizontal
-            labels.distribution = .equalSpacing
-            let low = UILabel()
-            low.text = question.lowLabel
-            low.textColor = theme.subtext
-            low.font = UIFont.systemFont(ofSize: 12)
-            let high = UILabel()
-            high.text = question.highLabel
-            high.textColor = theme.subtext
-            high.font = UIFont.systemFont(ofSize: 12)
-            labels.addArrangedSubview(low)
-            labels.addArrangedSubview(high)
+            labels.distribution = .fillEqually
+            labels.spacing = 16
+            for (text, alignment) in [(question.lowLabel, NSTextAlignment.natural), (question.highLabel, .right)] {
+                guard let text else { continue }
+                let label = SurfaceLabel.make(text, font: theme.surfaceFont(13), color: theme.subtext)
+                label.textAlignment = alignment
+                labels.addArrangedSubview(label)
+            }
+            stack.setCustomSpacing(10, after: stack.arrangedSubviews.last ?? stack)
             stack.addArrangedSubview(labels)
             labels.widthAnchor.constraint(equalTo: widthAnchor).isActive = true
         }
     }
 
     private func makeButton(value: Int) -> UIButton {
-        let button = UIButton(type: .system)
+        let button = UIButton(type: .custom)
+        let size = Self.controlSize
         switch displayMode {
         case .stars:
             button.setTitle("★", for: .normal)
-            button.titleLabel?.font = UIFont.systemFont(ofSize: 28, weight: .regular)
-            button.setTitleColor(theme.border, for: .normal)
-            button.backgroundColor = .clear
-            button.widthAnchor.constraint(equalToConstant: 36).isActive = true
-            button.heightAnchor.constraint(equalToConstant: 36).isActive = true
+            button.titleLabel?.font = UIFont.systemFont(ofSize: 34)
+            button.widthAnchor.constraint(equalToConstant: size).isActive = true
         case .emoji:
             button.setTitle(Self.emoji[value - 1], for: .normal)
-            button.titleLabel?.font = UIFont.systemFont(ofSize: 28)
-            button.backgroundColor = .clear
-            button.widthAnchor.constraint(equalToConstant: 44).isActive = true
-            button.heightAnchor.constraint(equalToConstant: 44).isActive = true
+            button.titleLabel?.font = UIFont.systemFont(ofSize: 30)
+            button.layer.cornerRadius = 26
+            button.widthAnchor.constraint(equalToConstant: 52).isActive = true
         case .numeric:
             button.setTitle(String(value), for: .normal)
-            button.titleLabel?.font = theme.boldFont
-            button.setTitleColor(theme.text, for: .normal)
-            button.backgroundColor = theme.background
-            button.layer.borderWidth = 1
-            button.layer.borderColor = theme.border.cgColor
-            button.layer.cornerRadius = 20
-            button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 10, bottom: 0, right: 10)
-            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 40).isActive = true
-            button.heightAnchor.constraint(equalToConstant: 40).isActive = true
+            button.titleLabel?.font = theme.surfaceFont(16, .bold)
+            button.layer.borderWidth = 1.5
+            button.layer.cornerRadius = theme.cappedRadius(12)
+            button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: size).isActive = true
         }
+        button.heightAnchor.constraint(equalToConstant: displayMode == .emoji ? 52 : size).isActive = true
         button.tag = value
         button.accessibilityLabel = "Rate \(value)"
         button.addTarget(self, action: #selector(didTap(_:)), for: .touchUpInside)
@@ -121,21 +117,20 @@ final class RatingQuestionView: UIView, QuestionView {
     func setSelectedValue(_ value: Int?) {
         selectedValue = value.flatMap { (1...scale).contains($0) ? $0 : nil }
         for button in buttons {
+            let isSelected = button.tag == selectedValue
             switch displayMode {
             case .stars:
                 let isFilled = selectedValue.map { button.tag <= $0 } ?? false
-                button.setTitleColor(
-                    isFilled ? theme.primary : theme.border,
-                    for: .normal
-                )
+                button.setTitleColor(isFilled ? theme.primary : theme.text.withAlphaComponent(0.16), for: .normal)
             case .emoji:
-                button.alpha = selectedValue == nil || button.tag == selectedValue ? 1 : 0.35
+                button.backgroundColor = isSelected ? theme.tint : .clear
+                button.alpha = selectedValue == nil || isSelected ? 1 : 0.4
             case .numeric:
-                let isSelected = button.tag == selectedValue
-                button.backgroundColor = isSelected ? theme.primary : theme.background
-                button.setTitleColor(isSelected ? theme.background : theme.text, for: .normal)
+                button.backgroundColor = isSelected ? theme.primary : .clear
+                button.layer.borderColor = (isSelected ? theme.primary : theme.border).cgColor
+                button.setTitleColor(isSelected ? theme.onPrimary : theme.text, for: .normal)
             }
-            button.accessibilityTraits = button.tag == selectedValue ? [.button, .selected] : .button
+            button.accessibilityTraits = isSelected ? [.button, .selected] : .button
         }
     }
 

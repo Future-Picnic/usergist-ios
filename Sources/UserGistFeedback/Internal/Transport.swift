@@ -306,10 +306,19 @@ struct SubmitResponsePayload: Codable {
     let answers: [ResponseAnswerWire]?
     let dismissed: Bool?
     let latencyMs: Int?
+    // Optional when decoding durable submissions written by older SDKs.
+    let platform: String?
+    let sdkVersion: String?
+    let appVersion: String?
 }
 
 extension SubmitResponsePayload {
-    init(info: PromptResponseInfo, identity: IdentityStore.Snapshot) {
+    init(
+        info: PromptResponseInfo,
+        identity: IdentityStore.Snapshot,
+        sdkVersion: String = UserGistConfig.currentSDKVersion,
+        appVersion: String? = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+    ) {
         self.init(
             idempotencyKey: UUID().uuidString,
             promptId: info.promptId,
@@ -327,7 +336,10 @@ extension SubmitResponsePayload {
                 return ResponseAnswerWire(questionId: answer.questionId, value: value)
             },
             dismissed: info.dismissed,
-            latencyMs: info.latencyMs
+            latencyMs: info.latencyMs,
+            platform: "ios",
+            sdkVersion: sdkVersion,
+            appVersion: appVersion
         )
     }
 }

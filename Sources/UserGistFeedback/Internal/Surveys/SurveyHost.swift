@@ -95,6 +95,7 @@ enum SurveyHost {
             releaseCurrent = release
             hosting.modalPresentationStyle = .fullScreen
             hosting.view.backgroundColor = theme.background
+            hosting.overrideUserInterfaceStyle = theme.interfaceStyle
             presenter.present(hosting, animated: true) {
                 handlers.onShow?(surveyId)
             }

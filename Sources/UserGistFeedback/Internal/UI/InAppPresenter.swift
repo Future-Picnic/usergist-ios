@@ -62,6 +62,8 @@ final class InAppPresenter {
     }
 }
 
+/// Hosts one in-app message (PORTED FROM RN InAppMessageView). Card and
+/// slide-up float over a themed scrim; full screen uses the theme background.
 final class InAppMessageController: UIViewController,
     UIAdaptivePresentationControllerDelegate, UIGestureRecognizerDelegate {
     private let message: ArmedInAppMessage
@@ -70,8 +72,17 @@ final class InAppMessageController: UIViewController,
     private let onCta: (InAppCta, Int) -> Void
     private var delivered = false
     private var autoDismissTimer: Timer?
-    private var imageTask: URLSessionDataTask?
     private let card = UIView()
+    private var cardConstraints: [NSLayoutConstraint] = []
+    private var builtForLandscape: Bool?
+
+    private var format: InAppLayoutFormat {
+        switch message.format {
+        case .modal: return .card
+        case .modalFull: return .full
+        case .slideup: return .slide
+        }
+    }
 
     init(
         message: ArmedInAppMessage,
@@ -84,35 +95,61 @@ final class InAppMessageController: UIViewController,
         self.onDismiss = onDismiss
         self.onCta = onCta
         super.init(nibName: nil, bundle: nil)
-
-        switch message.format {
-        case .modal:
+        if message.format == .modalFull {
+            modalPresentationStyle = .fullScreen
+        } else {
             modalPresentationStyle = .overFullScreen
             modalTransitionStyle = .crossDissolve
-        case .modalFull:
-            modalPresentationStyle = .fullScreen
-        case .slideup:
-            modalPresentationStyle = .pageSheet
-            if #available(iOS 15.0, *), let sheet = sheetPresentationController {
-                sheet.detents = [.medium(), .large()]
-                sheet.prefersGrabberVisible = true
-                sheet.preferredCornerRadius = theme.radius
-                if !message.backdropEnabled {
-                    sheet.largestUndimmedDetentIdentifier = .large
-                }
-            }
         }
         presentationController?.delegate = self
     }
 
     required init?(coder: NSCoder) { nil }
 
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        presentingViewController?.supportedInterfaceOrientations ?? .allButUpsideDown
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = message.format == .modal && message.backdropEnabled
-            ? UIColor.black.withAlphaComponent(0.4)
-            : (message.format == .modal ? .clear : theme.background)
-        buildInterface()
+        let overlay = format != .full
+        overrideUserInterfaceStyle = theme.interfaceStyle
+        view.backgroundColor = overlay
+            ? (message.backdropEnabled ? theme.scrim : .clear)
+            : theme.background
+        if overlay {
+            // The backdrop always dismisses, even when it is transparent.
+            let tap = UITapGestureRecognizer(target: self, action: #selector(backdropTapped(_:)))
+            tap.delegate = self
+            view.addGestureRecognizer(tap)
+        }
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.accessibilityIdentifier = "usergist_inapp_card"
+        card.backgroundColor = theme.background
+        card.layer.cornerRadius = overlay ? theme.radius : 0
+        card.layer.masksToBounds = true
+        if overlay {
+            card.layer.borderWidth = 1 / UIScreen.main.scale
+            card.layer.borderColor = theme.text.withAlphaComponent(0.08).cgColor
+        }
+        view.addSubview(card)
+        rebuild(for: view.bounds.size == .zero ? UIScreen.main.bounds.size : view.bounds.size)
+    }
+
+    override func viewWillLayoutSubviews() {
+        super.viewWillLayoutSubviews()
+        let size = view.bounds.size
+        if size != .zero, builtForLandscape != (size.width > size.height) { rebuild(for: size) }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        guard format == .slide, animated, !UIAccessibility.isReduceMotionEnabled else { return }
+        view.layoutIfNeeded()
+        card.transform = CGAffineTransform(translationX: 0, y: view.bounds.height - card.frame.minY)
+        UIView.animate(withDuration: 0.36, delay: 0, options: [.curveEaseOut]) {
+            self.card.transform = .identity
+        }
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -132,181 +169,103 @@ final class InAppMessageController: UIViewController,
 
     deinit {
         autoDismissTimer?.invalidate()
-        imageTask?.cancel()
     }
 
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
         deliverDismiss(.user)
     }
 
-    private func buildInterface() {
-        let isFull = message.format == .modalFull
-        let isSlide = message.format == .slideup
+    // MARK: - Layout
 
-        if message.format == .modal {
-            let tap = UITapGestureRecognizer(target: self, action: #selector(backdropTapped(_:)))
-            tap.delegate = self
-            view.addGestureRecognizer(tap)
-        }
+    private func rebuild(for size: CGSize) {
+        let landscape = size.width > size.height
+        builtForLandscape = landscape
+        card.subviews.forEach { $0.removeFromSuperview() }
+        NSLayoutConstraint.deactivate(cardConstraints)
 
-        card.translatesAutoresizingMaskIntoConstraints = false
-        card.accessibilityIdentifier = "usergist_inapp_card"
-        card.backgroundColor = theme.background
-        card.layer.cornerRadius = isFull ? 0 : theme.radius
-        card.layer.masksToBounds = true
-        view.addSubview(card)
-
-        let scroll = UIScrollView()
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-        scroll.alwaysBounceVertical = false
-        card.addSubview(scroll)
-
-        let stack = UIStackView()
-        stack.axis = .vertical
-        stack.spacing = 0
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        scroll.addSubview(stack)
-
-        let closeRow = UIView()
-        closeRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 52).isActive = true
-        let close = UIButton(type: .system)
-        close.translatesAutoresizingMaskIntoConstraints = false
-        close.setImage(UIImage(systemName: "xmark"), for: .normal)
-        close.tintColor = theme.text
-        close.accessibilityLabel = "Close"
+        let close = SurfaceIconButton(glyph: .close, color: theme.text)
         close.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
-        closeRow.addSubview(close)
-        NSLayoutConstraint.activate([
-            close.trailingAnchor.constraint(equalTo: closeRow.trailingAnchor, constant: -8),
-            close.topAnchor.constraint(equalTo: closeRow.topAnchor, constant: 4),
-            close.widthAnchor.constraint(equalToConstant: 44),
-            close.heightAnchor.constraint(equalToConstant: 44)
-        ])
-        stack.addArrangedSubview(closeRow)
-
-        if let imageURL = message.imageUrl.flatMap(URL.init(string:)) {
-            let imageView = UIImageView()
-            imageView.contentMode = .scaleAspectFill
-            imageView.clipsToBounds = true
-            imageView.isAccessibilityElement = false
-            imageView.heightAnchor.constraint(equalToConstant: isFull ? 260 : 176).isActive = true
-            stack.addArrangedSubview(imageView)
-            loadImage(imageURL, into: imageView)
-        }
-
-        let copy = UIStackView()
-        copy.axis = .vertical
-        copy.spacing = 8
-        copy.isLayoutMarginsRelativeArrangement = true
-        copy.layoutMargins = UIEdgeInsets(top: 24, left: 24, bottom: 12, right: 24)
-
-        let title = UILabel()
-        title.text = message.title
-        title.textColor = theme.text
-        title.numberOfLines = 0
-        title.adjustsFontForContentSizeCategory = true
-        title.font = UIFontMetrics(forTextStyle: .title2).scaledFont(for: theme.titleFont)
-        copy.addArrangedSubview(title)
-
-        if let body = message.body, !body.isEmpty {
-            let bodyLabel = UILabel()
-            bodyLabel.text = body
-            bodyLabel.textColor = theme.subtext
-            bodyLabel.numberOfLines = 0
-            bodyLabel.adjustsFontForContentSizeCategory = true
-            bodyLabel.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: theme.font)
-            copy.addArrangedSubview(bodyLabel)
-        }
-        stack.addArrangedSubview(copy)
-
-        if !message.ctas.isEmpty {
-            let buttons = UIStackView()
-            buttons.axis = .vertical
-            buttons.spacing = 8
-            buttons.isLayoutMarginsRelativeArrangement = true
-            buttons.layoutMargins = UIEdgeInsets(top: 12, left: 24, bottom: 24, right: 24)
-            for (index, cta) in message.ctas.enumerated() {
-                let button = UIButton(type: .system)
+        let layout = InAppMessageLayout(
+            message: message,
+            format: format,
+            theme: theme,
+            landscape: landscape,
+            maxFooterHeight: max(120, (size.height * 0.4).rounded()),
+            close: close,
+            makeCta: { [weak self] index, button in
                 button.tag = index
-                button.setTitle(cta.label, for: .normal)
-                button.titleLabel?.font = theme.boldFont
-                button.titleLabel?.adjustsFontForContentSizeCategory = true
-                button.layer.cornerRadius = min(theme.radius, 14)
-                button.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
-                if index == 0 {
-                    button.backgroundColor = theme.primary
-                    button.setTitleColor(Self.contrastColor(on: theme.primary), for: .normal)
-                } else {
-                    button.backgroundColor = .clear
-                    button.setTitleColor(theme.primary, for: .normal)
-                    button.layer.borderWidth = 1
-                    button.layer.borderColor = theme.primary.cgColor
-                }
-                button.addTarget(self, action: #selector(ctaTapped(_:)), for: .touchUpInside)
-                buttons.addArrangedSubview(button)
+                button.addTarget(self, action: #selector(Self.ctaTapped(_:)), for: .touchUpInside)
             }
-            stack.addArrangedSubview(buttons)
-        }
-
-        NSLayoutConstraint.activate([
-            scroll.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: card.topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
-            stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor)
-        ])
-
-        if isFull || isSlide {
-            NSLayoutConstraint.activate([
+        )
+        let content = layout.build()
+        content.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(content)
+        let safe = view.safeAreaLayoutGuide
+        var constraints = [
+            content.leadingAnchor.constraint(equalTo: format == .full ? safe.leadingAnchor : card.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: format == .full ? safe.trailingAnchor : card.trailingAnchor),
+            content.topAnchor.constraint(equalTo: format == .full ? safe.topAnchor : card.topAnchor,
+                                         constant: format == .full ? 4 : 0),
+            content.bottomAnchor.constraint(equalTo: card.bottomAnchor,
+                                            constant: format == .full ? -max(view.safeAreaInsets.bottom, 12) : 0)
+        ]
+        switch format {
+        case .full:
+            constraints += [
+                content.bottomAnchor.constraint(lessThanOrEqualTo: safe.bottomAnchor),
                 card.leadingAnchor.constraint(equalTo: view.leadingAnchor),
                 card.trailingAnchor.constraint(equalTo: view.trailingAnchor),
                 card.topAnchor.constraint(equalTo: view.topAnchor),
                 card.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-            ])
-        } else {
-            let preferredWidth = card.widthAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.widthAnchor,
-                constant: -32
-            )
-            preferredWidth.priority = .defaultHigh
-            // UIScrollView has no intrinsic height. Prefer the content's
-            // natural height while retaining the required viewport cap so
-            // oversized messages scroll instead of collapsing the card.
-            let contentHeight = card.heightAnchor.constraint(equalTo: stack.heightAnchor)
-            contentHeight.priority = .defaultHigh
-            NSLayoutConstraint.activate([
-                card.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-                card.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-                card.leadingAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
-                card.trailingAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
-                card.widthAnchor.constraint(lessThanOrEqualToConstant: 420),
-                card.heightAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.heightAnchor, multiplier: 0.86),
-                preferredWidth,
-                contentHeight
-            ])
+            ]
+        case .card:
+            constraints += overlayConstraints(maxWidth: landscape ? SurfaceMetrics.contentMaxWidth : 400,
+                                              sideInset: 16)
+            constraints.append(card.centerYAnchor.constraint(equalTo: safe.centerYAnchor))
+        case .slide:
+            constraints += overlayConstraints(maxWidth: landscape ? SurfaceMetrics.contentMaxWidth : .greatestFiniteMagnitude,
+                                              sideInset: 12)
+            let bottomInset = max(view.safeAreaInsets.bottom, 12) + 4
+            constraints.append(card.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -bottomInset))
         }
+        cardConstraints = constraints
+        NSLayoutConstraint.activate(constraints)
     }
 
-    private func loadImage(_ url: URL, into imageView: UIImageView) {
-        imageTask = URLSession.shared.dataTask(with: url) { data, response, _ in
-            guard let http = response as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode),
-                  http.expectedContentLength <= 10 * 1_024 * 1_024,
-                  let data,
-                  data.count <= 10 * 1_024 * 1_024,
-                  let image = UIImage(data: data)
-            else { return }
-            DispatchQueue.main.async { [weak imageView] in imageView?.image = image }
+    /// Centred, width-capped card that never leaves the safe area.
+    private func overlayConstraints(maxWidth: CGFloat, sideInset: CGFloat) -> [NSLayoutConstraint] {
+        let safe = view.safeAreaLayoutGuide
+        let preferredWidth = card.widthAnchor.constraint(equalTo: safe.widthAnchor, constant: -2 * sideInset)
+        preferredWidth.priority = .defaultHigh
+        var constraints = [
+            card.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
+            card.leadingAnchor.constraint(greaterThanOrEqualTo: safe.leadingAnchor, constant: sideInset),
+            card.trailingAnchor.constraint(lessThanOrEqualTo: safe.trailingAnchor, constant: -sideInset),
+            card.topAnchor.constraint(greaterThanOrEqualTo: safe.topAnchor, constant: 8),
+            card.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor,
+                                         constant: -(max(view.safeAreaInsets.bottom, 12))),
+            preferredWidth
+        ]
+        if maxWidth < .greatestFiniteMagnitude {
+            constraints.append(card.widthAnchor.constraint(lessThanOrEqualToConstant: maxWidth))
         }
-        imageTask?.resume()
+        return constraints
     }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        if builtForLandscape != nil { rebuild(for: view.bounds.size) }
+    }
+
+    // MARK: - Actions
 
     @objc private func closeTapped() {
         dismiss(reason: .user)
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard let touched = touch.view else { return true }
+        return !touched.isDescendant(of: card)
     }
 
     @objc private func backdropTapped(_ recognizer: UITapGestureRecognizer) {
@@ -319,14 +278,30 @@ final class InAppMessageController: UIViewController,
         delivered = true
         autoDismissTimer?.invalidate()
         let cta = message.ctas[sender.tag]
-        dismiss(animated: true) { [onCta] in onCta(cta, sender.tag) }
+        let index = sender.tag
+        animateOut { [weak self] in
+            self?.dismiss(animated: true) { [onCta = self?.onCta] in onCta?(cta, index) }
+        }
     }
 
     private func dismiss(reason: InAppDismissReason) {
         guard !delivered else { return }
         delivered = true
         autoDismissTimer?.invalidate()
-        dismiss(animated: true) { [onDismiss] in onDismiss(reason) }
+        animateOut { [weak self] in
+            self?.dismiss(animated: true) { [onDismiss = self?.onDismiss] in onDismiss?(reason) }
+        }
+    }
+
+    /// Slide-up leaves the way it came in; other formats cross-fade.
+    private func animateOut(_ completion: @escaping () -> Void) {
+        guard format == .slide, !UIAccessibility.isReduceMotionEnabled, view.window != nil else {
+            completion()
+            return
+        }
+        UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseIn]) {
+            self.card.transform = CGAffineTransform(translationX: 0, y: self.view.bounds.height - self.card.frame.minY)
+        } completion: { _ in completion() }
     }
 
     private func deliverDismiss(_ reason: InAppDismissReason) {
@@ -340,18 +315,5 @@ final class InAppMessageController: UIViewController,
         delivered = true
         autoDismissTimer?.invalidate()
         dismiss(animated: false)
-    }
-
-    private static func contrastColor(on color: UIColor) -> UIColor {
-        var white: CGFloat = 0
-        if color.getWhite(&white, alpha: nil) {
-            return white < 0.58 ? .white : .black
-        }
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
-        color.getRed(&red, green: &green, blue: &blue, alpha: nil)
-        let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-        return luminance < 0.58 ? .white : .black
     }
 }

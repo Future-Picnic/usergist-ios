@@ -43,12 +43,12 @@ final class FrequencyCapStore {
             let now = clock()
             if let perPromptDays = caps.perPromptDays, perPromptDays > 0 {
                 let cutoff = now.addingTimeInterval(-Double(perPromptDays) * 86_400)
-                let shows = (snapshot.promptShows[promptId] ?? []).filter { $0 >= cutoff }
+                let shows = (snapshot.promptShows[promptId] ?? []).filter { $0 > cutoff }
                 if !shows.isEmpty { return false }
             }
             if let perUserDays = caps.perUserDays, perUserDays > 0 {
                 let cutoff = now.addingTimeInterval(-Double(perUserDays) * 86_400)
-                let shows = snapshot.globalShows.filter { $0 >= cutoff }
+                let shows = snapshot.globalShows.filter { $0 > cutoff }
                 if !shows.isEmpty { return false }
             }
             return true
