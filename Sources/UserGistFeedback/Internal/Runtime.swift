@@ -15,6 +15,7 @@ final class Runtime {
     private let eventQueue: EventQueue
     let apiClient: APIClient
     private let transport: Transport
+    private var screenName: String?
     private let rulesCache: RulesCache
     private let campaignRules: CampaignRulesCache
     private let frequencyCap: FrequencyCapStore
@@ -34,7 +35,7 @@ final class Runtime {
     /// Serial queue for all mutating operations.
     private let workQueue: DispatchQueue
 
-    private var themeOverrides: PromptTheme?
+    private(set) var themeOverrides: PromptTheme?
     private var triggerSyncTimer: DispatchSourceTimer?
     private var lastTriggerSync: Date?
     private var isRefreshingTriggers = false
@@ -229,6 +230,7 @@ final class Runtime {
         // Kick off an immediate trigger refresh so the first event can
         // match against fresh rules.
         self.refreshTriggers()
+        self.emitAppVersionChanged()
         self.requestAppOpen()
         self.pollInstructions()
         self.flushMutations()
@@ -454,12 +456,21 @@ final class Runtime {
         flushMutations()
     }
 
+    func setScreenName(_ name: String?) {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        screenName = trimmed.isEmpty ? nil : String(trimmed.prefix(120))
+        presentationEligibility.updateScreenName(screenName)
+        pollInstructions()
+    }
+
     func track(
         eventName: String,
         properties: [String: Any]?,
         purpose: EventPurpose = .analytics
     ) {
         guard !resetInProgress else { return }
+        let consent = consentStore.current()
+        guard purpose == .analytics ? consent.analytics == true : consent.feedback == true else { return }
         guard !eventName.isEmpty else {
             logger.warn("track requires a non-empty event name")
             return
@@ -482,7 +493,8 @@ final class Runtime {
             purpose: purpose
         )
 
-        // Gate the transport; queue grows until consent granted.
+        // Only allowed collection enters the retry queue. A later grant must
+        // not resurrect activity created during a denied period.
         eventQueue.enqueue(event)
         if consentStore.allowsTransport {
             transport.flushIfNeeded()
@@ -1182,6 +1194,22 @@ final class Runtime {
         if stale { refreshTriggers() }
     }
 
+    private func emitAppVersionChanged() {
+        guard let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+              !current.isEmpty else { return }
+        let file = storage.root.appendingPathComponent("app_version.json")
+        let previous = (try? storage.readJSON(String.self, at: file)) ?? nil
+        // Remember versions even while analytics is denied, matching RN. A later
+        // consent grant must not replay an upgrade that occurred while denied.
+        do { try storage.writeJSON(current, to: file) }
+        catch { return }
+        guard let previous, previous != current,
+              consentStore.current().analytics == true else { return }
+        track(eventName: "$app_version_changed", properties: [
+            "old_version": previous, "new_version": current
+        ], purpose: .analytics)
+    }
+
     private func requestAppOpen() {
         guard consentStore.current().feedback == true else {
             appOpenPending = true
@@ -1359,8 +1387,11 @@ final class Runtime {
                 URLQueryItem(name: "limit", value: "100"),
                 URLQueryItem(name: "protocolVersion", value: "2"),
                 URLQueryItem(name: "platform", value: "ios"),
+                URLQueryItem(name: "screenName", value: screenName),
                 URLQueryItem(name: "anonymousId", value: identityStore.anonymousId)
-            ],
+            ] + ((Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String).map {
+                [URLQueryItem(name: "appVersion", value: $0)]
+            } ?? []),
             responseType: InstructionEnvelope.self
         ) { [weak self] result in
             guard let self else { return }
@@ -1505,6 +1536,9 @@ final class Runtime {
                   !message.messageId.isEmpty,
                   !message.title.isEmpty
             else { return }
+            let screen = screenName ?? ""
+            guard (message.screenAllowlist.isEmpty || message.screenAllowlist.contains(screen)),
+                  !message.screenDenylist.contains(screen) else { return }
             if let triggerEventId = instruction.payload["triggerEventId"]?.value as? String,
                consumeLocalInstruction(
                 type: instruction.type,
@@ -1544,7 +1578,12 @@ final class Runtime {
 
     private func presentInApp(_ message: ArmedInAppMessage) {
         guard !resetInProgress else { return }
-        let isValid = presentationEligibility.validator(for: .feedback)
+        let consentValid = presentationEligibility.validator(for: .feedback)
+        let eligibility = presentationEligibility
+        let isValid = {
+            consentValid() && eligibility.allowsScreen(
+                allowlist: message.screenAllowlist, denylist: message.screenDenylist)
+        }
         let serverTheme = PromptTheme(
             colors: .init(
                 primary: message.accentColor,
@@ -1686,7 +1725,7 @@ final class Runtime {
 
     private func handleResponse(info: PromptResponseInfo) {
         let identity = identityStore.current()
-        let payload = SubmitResponsePayload(info: info, identity: identity)
+        let payload = SubmitResponsePayload(info: info, identity: identity, sdkVersion: config.sdkVersion)
         if let data = try? JSONEncoder.usergist().encode(payload),
            mutations.enqueue(
             kind: .feedbackResponse,

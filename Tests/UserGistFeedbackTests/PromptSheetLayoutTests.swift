@@ -34,4 +34,28 @@ final class PromptSheetLayoutTests: XCTestCase {
 
         XCTAssertEqual(frame, CGRect(x: 0, y: 36, width: 320, height: 272))
     }
+
+    func testLandscapeSheetSpansTheFullWidthAboveTheKeyboard() {
+        let frame = PromptSheetLayout.frame(
+            containerBounds: CGRect(x: 0, y: 0, width: 874, height: 402),
+            safeTop: 0,
+            requestedHeight: 320,
+            keyboardOverlap: 210
+        )
+
+        XCTAssertEqual(frame.width, 874, "The sheet background is never a narrow card")
+        XCTAssertEqual(frame.maxY, 192)
+        XCTAssertEqual(frame.minY, 16)
+    }
+
+    func testShortContentKeepsAMinimumSheetHeight() {
+        let frame = PromptSheetLayout.frame(
+            containerBounds: CGRect(x: 0, y: 0, width: 402, height: 874),
+            safeTop: 62,
+            requestedHeight: 90,
+            keyboardOverlap: 0
+        )
+
+        XCTAssertEqual(frame.height, PromptSheetLayout.minimumHeight)
+    }
 }

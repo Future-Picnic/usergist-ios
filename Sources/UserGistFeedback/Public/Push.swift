@@ -26,6 +26,7 @@ public struct UserGistPushMessage: Sendable {
     public let title: String?
     public let body: String?
     public let actionButtons: [PushActionButton]
+    public let openAction: PushOpenAction?
 
     public init(
         campaignId: String? = nil,
@@ -35,7 +36,8 @@ public struct UserGistPushMessage: Sendable {
         deepLink: String? = nil,
         title: String? = nil,
         body: String? = nil,
-        actionButtons: [PushActionButton] = []
+        actionButtons: [PushActionButton] = [],
+        openAction: PushOpenAction? = nil
     ) {
         self.campaignId = campaignId
         self.variantId = variantId
@@ -45,6 +47,7 @@ public struct UserGistPushMessage: Sendable {
         self.title = title
         self.body = body
         self.actionButtons = actionButtons
+        self.openAction = openAction
     }
 
     /// Attempts to parse a UserGist push message out of an APNs userInfo
@@ -62,8 +65,22 @@ public struct UserGistPushMessage: Sendable {
             deepLink: usergist["deepLink"] as? String,
             title: alert?["title"] as? String,
             body: alert?["body"] as? String,
-            actionButtons: PushActionButton.parse(usergist["actionButtons"])
+            actionButtons: PushActionButton.parse(usergist["actionButtons"]),
+            openAction: PushOpenAction.parse(usergist["openAction"])
         )
+    }
+}
+
+/// Action configured for tapping the notification itself.
+public struct PushOpenAction: Codable, Sendable, Equatable {
+    public let action: String
+    public let target: String?
+    public let actionJson: JsonAction?
+
+    fileprivate static func parse(_ value: Any?) -> PushOpenAction? {
+        guard let value, JSONSerialization.isValidJSONObject(value),
+              let data = try? JSONSerialization.data(withJSONObject: value) else { return nil }
+        return try? JSONDecoder().decode(PushOpenAction.self, from: data)
     }
 }
 
@@ -382,8 +399,12 @@ public final class UserGistPush {
             emit(event: "$push_opened", message: msg)
             lock.lock()
             let cb = handlers.onOpen
+            let jsonCb = handlers.onJsonAction
             lock.unlock()
             cb?(msg)
+            if msg.openAction?.action == "json", let actionJson = msg.openAction?.actionJson {
+                jsonCb?(actionJson, msg, "usergist_default")
+            }
         }
     }
 

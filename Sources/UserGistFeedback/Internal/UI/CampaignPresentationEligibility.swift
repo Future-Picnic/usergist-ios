@@ -11,6 +11,19 @@ final class CampaignPresentationEligibility {
     private var survey = UUID()
     private var feedbackAllowed = false
     private var surveyAllowed = false
+    private var screenName = ""
+
+    func updateScreenName(_ name: String?) {
+        lock.lock()
+        screenName = name ?? ""
+        lock.unlock()
+    }
+
+    func allowsScreen(allowlist: [String], denylist: [String]) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return (allowlist.isEmpty || allowlist.contains(screenName)) && !denylist.contains(screenName)
+    }
 
     func updateConsent(_ consent: Consent) {
         lock.lock()

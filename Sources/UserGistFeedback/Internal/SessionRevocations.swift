@@ -30,7 +30,7 @@ final class SessionRevocations {
             guard let self else { return }
             self.draining = false
             switch result {
-            case .success, .failure(.server(status: 401, body: _)):
+            case .success, .failure(.server(status: 401, body: _)), .failure(.server(status: 403, body: _)):
                 let previous = self.entries
                 self.entries.removeAll { $0.id == entry.id }
                 if self.persist() { self.drain() } else { self.entries = previous }

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// SwiftUI bridge that keeps survey ratings on the prompt SDK's star-first control.
 @available(iOS 14.0, *)
@@ -26,8 +27,12 @@ struct SurveyRatingInput: UIViewRepresentable {
         let count = promptQuestion(for: question).scale
         let rowSize = min(count, 5)
         let rowCount = Int(ceil(Double(count) / Double(rowSize)))
-        let rowsHeight = CGFloat(rowCount * 36 + max(0, rowCount - 1) * 8)
-        let labelsHeight: CGFloat = (question.lowLabel != nil || question.highLabel != nil) ? 23 : 0
+        let size = RatingQuestionView.controlSize
+        let gap = RatingQuestionView.rowSpacing
+        let rowsHeight = CGFloat(rowCount) * size + CGFloat(max(0, rowCount - 1)) * gap
+        // 10pt gap plus one line of 13pt endpoint text (Dynamic Type aware).
+        let labelsHeight: CGFloat = (question.lowLabel != nil || question.highLabel != nil)
+            ? 10 + ceil(UIFontMetrics.default.scaledValue(for: 17)) : 0
         return rowsHeight + labelsHeight
     }
 

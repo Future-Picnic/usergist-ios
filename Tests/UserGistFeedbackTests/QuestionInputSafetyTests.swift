@@ -29,7 +29,8 @@ final class QuestionInputSafetyTests: XCTestCase {
             """
             let question = try JSONDecoder().decode(SurveyQuestion.self, from: Data(json.utf8))
             XCTAssertEqual(SurveyRatingInput.promptQuestion(for: question).scale, scale == 10 ? 10 : 5)
-            XCTAssertEqual(SurveyRatingInput.preferredHeight(for: question), scale == 10 ? 80 : 36)
+            // 48pt targets; a 10-point scale uses two centred rows of five.
+            XCTAssertEqual(SurveyRatingInput.preferredHeight(for: question), scale == 10 ? 104 : 48)
         }
     }
 

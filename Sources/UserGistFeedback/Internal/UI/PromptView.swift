@@ -1,8 +1,13 @@
 import Foundation
 import UIKit
 
-/// React Native-parity prompt surface: one question at a time, with
-/// tap-to-select auto-advance and a single explicit close affordance.
+// PORTED FROM: packages/sdk-react-native/src/ui/PromptSheet.tsx
+//
+// One question at a time, tap-to-select auto-advance, one Close. The sheet
+// background spans the full width; the header sits at the safe-area edges
+// (Close leading, step centred) and the scrolling question plus the
+// full-width Next/Submit footer share one centred 560pt readable column. The
+// footer sits outside the scroll and the sheet rides above the keyboard.
 final class PromptView: UIView {
     enum Outcome {
         case submitted(answers: [PromptAnswerInfo])
@@ -13,21 +18,33 @@ final class PromptView: UIView {
     private let theme: ResolvedTheme
     private let onFinish: (Outcome) -> Void
 
+    private let header = SurfaceHeaderView()
+    private let stepLabel = UILabel()
+    private let measure = UIStackView()
     private let scroll = UIScrollView()
     private let content = UIStackView()
     private let questionHost = UIView()
-    private lazy var nextButton: UIButton = makeNextButton()
+    private let footer = UIView()
+    private lazy var closeButton = SurfaceIconButton(glyph: .close, color: theme.text)
+    private lazy var nextButton = SurfacePrimaryButton(title: "Next", theme: theme)
+    private var bottomPadding: NSLayoutConstraint?
     private var currentQuestionView: QuestionView?
+    private var currentTitle: UILabel?
+    private var currentSubtitle: UILabel?
     private var answers: [String: PromptAnswerValue] = [:]
     private var index = 0
     private var advanceWorkItem: DispatchWorkItem?
     private var closing = false
+    private var editingObservers: [NSObjectProtocol] = []
+    private var landscape: Bool?
+    private var lastReportedHeight: CGFloat = 0
+
+    /// Window size and safe area before this view is on screen, so the first
+    /// sheet frame already has the right height and orientation.
+    var layoutHint: (size: CGSize, insets: UIEdgeInsets)?
 
     var onPreferredHeightChange: ((CGFloat) -> Void)? {
-        didSet {
-            guard prompt.questions.indices.contains(index) else { return }
-            onPreferredHeightChange?(estimatedHeight(for: prompt.questions[index]))
-        }
+        didSet { reportPreferredHeight(force: true) }
     }
 
     init(prompt: ClientPrompt, theme: ResolvedTheme, onFinish: @escaping (Outcome) -> Void) {
@@ -38,77 +55,188 @@ final class PromptView: UIView {
         backgroundColor = theme.background
         buildUI()
         renderCurrentQuestion(animated: false)
+        for name in [UITextView.textDidBeginEditingNotification, UITextView.textDidChangeNotification,
+                     UITextField.textDidBeginEditingNotification, UITextField.textDidChangeNotification] {
+            editingObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
+                guard let self, let input = notification.object as? UIView,
+                      input.isDescendant(of: self.questionHost) else { return }
+                self.setNeedsLayout()
+            })
+        }
     }
 
     required init?(coder: NSCoder) { nil }
 
+    deinit {
+        editingObservers.forEach { NotificationCenter.default.removeObserver($0) }
+    }
+
+    override func layoutSubviews() {
+        applyEnvironment()
+        super.layoutSubviews()
+        scroll.superview?.layoutIfNeeded()
+        scroll.layoutIfNeeded()
+        content.layoutIfNeeded()
+        keepEditingLineVisible(in: questionHost)
+        reportPreferredHeight(force: false)
+    }
+
+    override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        setNeedsLayout()
+    }
+
+    private func keepEditingLineVisible(in root: UIView) {
+        if root.isFirstResponder, let input = root as? (UIView & UITextInput),
+           let selection = input.selectedTextRange {
+            let caret = input.caretRect(for: selection.end)
+            scroll.scrollRectToVisible(input.convert(caret, to: scroll).insetBy(dx: 0, dy: -12), animated: false)
+            return
+        }
+        for child in root.subviews {
+            keepEditingLineVisible(in: child)
+        }
+    }
+
+    // MARK: - Layout
+
     private func buildUI() {
-        scroll.translatesAutoresizingMaskIntoConstraints = false
+        stepLabel.font = theme.surfaceFont(13, .semibold)
+        stepLabel.adjustsFontForContentSizeCategory = true
+        stepLabel.textColor = theme.subtext
+        closeButton.addTarget(self, action: #selector(didTapDismiss), for: .touchUpInside)
+        nextButton.addTarget(self, action: #selector(didTapNext), for: .touchUpInside)
+        header.leading.addArrangedSubview(closeButton)
+        header.setCenter(stepLabel)
+        header.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(header)
+
         scroll.alwaysBounceVertical = false
         scroll.showsVerticalScrollIndicator = false
-        scroll.keyboardDismissMode = .onDrag
-        addSubview(scroll)
-
+        scroll.keyboardDismissMode = .interactive
         content.axis = .vertical
-        content.spacing = 0
         content.alignment = .fill
         content.translatesAutoresizingMaskIntoConstraints = false
+        content.addArrangedSubview(questionHost)
         scroll.addSubview(content)
 
-        content.addArrangedSubview(makeHeader())
-        content.addArrangedSubview(spacer(height: 24))
-        content.addArrangedSubview(questionHost)
-        content.addArrangedSubview(spacer(height: 20))
-        content.addArrangedSubview(nextButton)
+        nextButton.translatesAutoresizingMaskIntoConstraints = false
+        footer.addSubview(nextButton)
 
+        measure.axis = .vertical
+        measure.addArrangedSubview(scroll)
+        measure.addArrangedSubview(footer)
+        measure.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(measure)
+
+        let fullWidth = measure.widthAnchor.constraint(equalTo: widthAnchor, constant: -24)
+        fullWidth.priority = .defaultHigh
+        let bottom = measure.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -16)
+        bottomPadding = bottom
         NSLayoutConstraint.activate([
-            scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
-
-            content.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 20),
-            content.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -20),
-            content.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 20),
-            content.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -30),
-            content.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -40),
-            nextButton.heightAnchor.constraint(equalToConstant: 52)
+            header.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            measure.topAnchor.constraint(equalTo: header.bottomAnchor),
+            measure.centerXAnchor.constraint(equalTo: centerXAnchor),
+            measure.widthAnchor.constraint(lessThanOrEqualToConstant: SurfaceMetrics.contentMaxWidth),
+            fullWidth,
+            bottom,
+            content.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 12),
+            content.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -12),
+            content.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 4),
+            content.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -20),
+            content.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -24),
+            nextButton.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 12),
+            nextButton.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -12),
+            nextButton.topAnchor.constraint(equalTo: footer.topAnchor, constant: 4),
+            nextButton.bottomAnchor.constraint(equalTo: footer.bottomAnchor)
         ])
+        // The scroll region gives up height first; header and footer stay put.
+        scroll.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        footer.setContentCompressionResistancePriority(.required, for: .vertical)
     }
 
-    private func makeHeader() -> UIView {
-        let container = UIView()
-        container.heightAnchor.constraint(equalToConstant: 32).isActive = true
-
-        let handle = UIView()
-        handle.backgroundColor = theme.border
-        handle.layer.cornerRadius = 2
-        handle.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(handle)
-
-        let close = UIButton(type: .system)
-        close.setTitle("✕", for: .normal)
-        close.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
-        close.setTitleColor(theme.text, for: .normal)
-        close.backgroundColor = UIColor.black.withAlphaComponent(0.06)
-        close.layer.cornerRadius = 16
-        close.accessibilityLabel = "Close"
-        close.translatesAutoresizingMaskIntoConstraints = false
-        close.addTarget(self, action: #selector(didTapDismiss), for: .touchUpInside)
-        container.addSubview(close)
-
-        NSLayoutConstraint.activate([
-            handle.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            handle.topAnchor.constraint(equalTo: container.topAnchor, constant: 6),
-            handle.widthAnchor.constraint(equalToConstant: 40),
-            handle.heightAnchor.constraint(equalToConstant: 4),
-            close.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            close.topAnchor.constraint(equalTo: container.topAnchor),
-            close.widthAnchor.constraint(equalToConstant: 32),
-            close.heightAnchor.constraint(equalToConstant: 32)
-        ])
-        return container
+    private var environmentSize: CGSize {
+        window?.bounds.size ?? layoutHint?.size ?? UIScreen.main.bounds.size
     }
+
+    private var environmentBottomInset: CGFloat {
+        window != nil ? safeAreaInsets.bottom : (layoutHint?.insets.bottom ?? 0)
+    }
+
+    /// Orientation decides where the main action lives. The NPS layout follows
+    /// the question's own content width (see `NpsQuestionView`), not the window.
+    private func applyEnvironment() {
+        let size = environmentSize
+        let isLandscape = size.width > size.height
+        bottomPadding?.constant = -max(environmentBottomInset, isLandscape ? 12 : 16)
+        guard landscape != isLandscape else { return }
+        landscape = isLandscape
+        placeActions()
+    }
+
+    /// Feedback has no Back: Close stays leading and the trailing slot stays
+    /// empty. Next/Submit is one full-width footer action in both
+    /// orientations; the sheet sits above the keyboard, so the footer does too.
+    private func placeActions() {
+        guard prompt.questions.indices.contains(index) else { return }
+        let needsNext = PromptFlow.needsExplicitNext(prompt.questions[index])
+        header.setTrailing([])
+        nextButton.compact = false
+        nextButton.isHidden = !needsNext
+        footer.isHidden = !needsNext
+        setNeedsLayout()
+    }
+
+    /// Width the question actually gets: sheet minus 12pt edges, capped to the
+    /// 560pt column, minus the column's 12pt content padding.
+    static func contentWidth(forSheetWidth width: CGFloat) -> CGFloat {
+        max(0, min(max(0, width - 24), SurfaceMetrics.contentMaxWidth) - 24)
+    }
+
+    private var expectedContentWidth: CGFloat {
+        Self.contentWidth(forSheetWidth: bounds.width > 0 ? bounds.width : environmentSize.width)
+    }
+
+    /// Natural sheet height: header, question, footer and bottom padding.
+    func preferredHeight(forWidth width: CGFloat) -> CGFloat {
+        let size = environmentSize
+        let isLandscape = size.width > size.height
+        let column = min(max(0, width - 24), SurfaceMetrics.contentMaxWidth)
+        let fitting = CGSize(width: Self.contentWidth(forSheetWidth: width),
+                             height: UIView.layoutFittingCompressedSize.height)
+        // Measure NPS in the layout it will actually use at this width.
+        (currentQuestionView as? NpsQuestionView)?.wide = NpsQuestionView.isWide(contentWidth: fitting.width)
+        let question = questionHost.subviews.first?.systemLayoutSizeFitting(
+            fitting, withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel
+        ).height ?? 0
+        let headerHeight = max(SurfaceMetrics.headerMinHeight, header.systemLayoutSizeFitting(
+            CGSize(width: max(0, width - 24), height: 0),
+            withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel
+        ).height)
+        var footerHeight: CGFloat = 0
+        if !footer.isHidden {
+            footerHeight = 4 + nextButton.systemLayoutSizeFitting(
+                CGSize(width: max(0, column - 24), height: 0),
+                withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel
+            ).height
+        }
+        let bottom = max(environmentBottomInset, isLandscape ? 12 : 16)
+        return ceil(8 + headerHeight + question + 24 + footerHeight + bottom)
+    }
+
+    private func reportPreferredHeight(force: Bool) {
+        guard let onPreferredHeightChange else { return }
+        let width = bounds.width > 0 ? bounds.width : environmentSize.width
+        if !force && bounds.width <= 0 { return }
+        let height = preferredHeight(forWidth: width)
+        guard force || abs(height - lastReportedHeight) > 0.5 else { return }
+        lastReportedHeight = height
+        onPreferredHeightChange(height)
+    }
+
+    // MARK: - Questions
 
     private func renderCurrentQuestion(animated: Bool) {
         advanceWorkItem?.cancel()
@@ -126,19 +254,21 @@ final class PromptView: UIView {
             block.bottomAnchor.constraint(equalTo: questionHost.bottomAnchor)
         ])
 
-        let explicitNext = PromptFlow.needsExplicitNext(question)
-        nextButton.isHidden = !explicitNext
+        let total = prompt.questions.count
+        stepLabel.text = total > 1 ? "\(index + 1) of \(total)" : nil
+        stepLabel.isHidden = total <= 1
+        nextButton.setTitle(index >= total - 1 ? "Submit" : "Next", for: .normal)
+        nextButton.accessibilityLabel = nextButton.title(for: .normal)
+        landscape = nil
+        applyEnvironment()
         updateNextButton()
-        onPreferredHeightChange?(estimatedHeight(for: question))
+        scroll.setContentOffset(.zero, animated: false)
+        reportPreferredHeight(force: true)
 
-        guard animated else { return }
+        guard animated, !UIAccessibility.isReduceMotionEnabled else { return }
         block.alpha = 0
         block.transform = CGAffineTransform(translationX: 36, y: 0)
-        UIView.animate(
-            withDuration: 0.24,
-            delay: 0,
-            options: [.curveEaseOut, .beginFromCurrentState]
-        ) {
+        UIView.animate(withDuration: 0.24, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
             block.alpha = 1
             block.transform = .identity
         }
@@ -147,38 +277,28 @@ final class PromptView: UIView {
     private func makeQuestionBlock(question: Question) -> UIView {
         let stack = UIStackView()
         stack.axis = .vertical
-        stack.spacing = 0
         stack.alignment = .fill
-
-        if let rawURL = question.imageUrl, let url = URL(string: rawURL) {
-            let image = PromptQuestionImageView(url: url, radius: theme.radius)
-            stack.addArrangedSubview(image)
-            image.heightAnchor.constraint(equalTo: image.widthAnchor, multiplier: 9.0 / 16.0).isActive = true
-            stack.setCustomSpacing(16, after: image)
+        let centered: Bool
+        switch question {
+        case .rating: centered = true
+        case .nps: centered = NpsQuestionView.isWide(contentWidth: expectedContentWidth)
+        default: centered = false
         }
-
-        let centered = isCentered(question)
-        let title = UILabel()
-        title.text = question.title
-        title.font = theme.titleFont
-        title.textColor = theme.text
-        title.numberOfLines = 0
-        title.textAlignment = centered ? .center : .left
-        stack.addArrangedSubview(title)
-
-        if let subtitle = question.subtitle, !subtitle.isEmpty {
-            stack.setCustomSpacing(4, after: title)
-            let label = UILabel()
-            label.text = subtitle
-            label.font = theme.font.withSize(14)
-            label.textColor = theme.subtext
-            label.numberOfLines = 0
-            label.textAlignment = centered ? .center : .left
-            stack.addArrangedSubview(label)
-            stack.setCustomSpacing(spacingBeforeControl(question, hasSubtitle: true), after: label)
-        } else {
-            stack.setCustomSpacing(spacingBeforeControl(question, hasSubtitle: false), after: title)
+        var subtitle = question.subtitle
+        if case .multipleChoice(let value) = question, value.multiSelect == true, subtitle?.isEmpty != false {
+            subtitle = "Choose all that apply"
         }
+        let headerBlock = SurfaceQuestionHeader.make(
+            title: question.title,
+            subtitle: subtitle,
+            imageURL: question.imageUrl.flatMap(URL.init(string:)),
+            theme: theme,
+            centered: centered
+        )
+        currentTitle = headerBlock.title
+        currentSubtitle = headerBlock.subtitle
+        stack.addArrangedSubview(headerBlock.view)
+        stack.setCustomSpacing(16, after: headerBlock.view)
 
         let view = makeQuestionView(question: question)
         currentQuestionView = view
@@ -189,10 +309,18 @@ final class PromptView: UIView {
             if PromptFlow.shouldAutoAdvance(question) {
                 self.scheduleAdvance(for: question.id)
             }
+            self.setNeedsLayout()
         }
         if let nps = view as? NpsQuestionView {
             nps.onFollowUpChange = { [weak self] text in
                 self?.answers["\(question.id)__followUp"] = .text(text)
+            }
+            // The 0–10 row centres its title; the narrow list stays leading.
+            nps.onWideChange = { [weak self] wide in
+                let alignment: NSTextAlignment = wide ? .center : .natural
+                self?.currentTitle?.textAlignment = alignment
+                self?.currentSubtitle?.textAlignment = alignment
+                self?.setNeedsLayout()
             }
         }
         stack.addArrangedSubview(view)
@@ -204,23 +332,13 @@ final class PromptView: UIView {
         case .rating(let q):
             return RatingQuestionView(question: q, theme: theme)
         case .nps(let q):
-            return NpsQuestionView(question: q, theme: theme)
+            return NpsQuestionView(question: q, theme: theme,
+                                   wide: NpsQuestionView.isWide(contentWidth: expectedContentWidth))
         case .multipleChoice(let q):
             return MultipleChoiceQuestionView(question: q, theme: theme)
         case .shortText(let q):
             return ShortTextQuestionView(question: q, theme: theme)
         }
-    }
-
-    private func makeNextButton() -> UIButton {
-        let button = UIButton(type: .system)
-        button.setTitle("Next", for: .normal)
-        button.titleLabel?.font = theme.titleFont.withSize(16)
-        button.setTitleColor(.white, for: .normal)
-        button.backgroundColor = theme.primary
-        button.layer.cornerRadius = 26
-        button.addTarget(self, action: #selector(didTapNext), for: .touchUpInside)
-        return button
     }
 
     private func updateNextButton() {
@@ -234,8 +352,7 @@ final class PromptView: UIView {
         } else {
             enabled = true
         }
-        nextButton.isEnabled = enabled
-        nextButton.alpha = enabled ? 1 : 0.4
+        nextButton.isActionEnabled = enabled
     }
 
     private func scheduleAdvance(for questionId: String) {
@@ -277,69 +394,5 @@ final class PromptView: UIView {
         closing = true
         advanceWorkItem?.cancel()
         onFinish(.dismissed(answers: PromptFlow.orderedAnswers(prompt: prompt, answers: answers)))
-    }
-
-    private func isCentered(_ question: Question) -> Bool {
-        switch question {
-        case .rating, .nps: return true
-        default: return false
-        }
-    }
-
-    private func spacingBeforeControl(_ question: Question, hasSubtitle: Bool) -> CGFloat {
-        switch question {
-        case .rating: return hasSubtitle ? 24 : 12
-        case .nps: return hasSubtitle ? 24 : 16
-        case .multipleChoice: return hasSubtitle ? 16 : 12
-        case .shortText: return hasSubtitle ? 12 : 4
-        }
-    }
-
-    private func estimatedHeight(for question: Question) -> CGFloat {
-        var height: CGFloat = 20 + 32 + 24 + 30 + 48
-        if question.subtitle?.isEmpty == false { height += 24 }
-        if question.imageUrl != nil {
-            height += max(0, UIScreen.main.bounds.width - 40) * 9.0 / 16.0 + 16
-        }
-        switch question {
-        case .rating(let value):
-            height += value.scale > 5 ? 88 : 44
-        case .nps:
-            height += 11 * 52
-        case .multipleChoice(let value):
-            height += CGFloat(value.options.count * 56) + 72
-        case .shortText:
-            height += 172
-        }
-        return max(280, height)
-    }
-
-    private func spacer(height: CGFloat) -> UIView {
-        let view = UIView()
-        view.heightAnchor.constraint(equalToConstant: height).isActive = true
-        return view
-    }
-}
-
-private final class PromptQuestionImageView: UIImageView {
-    private var task: URLSessionDataTask?
-
-    init(url: URL, radius: CGFloat) {
-        super.init(frame: .zero)
-        contentMode = .scaleAspectFill
-        clipsToBounds = true
-        layer.cornerRadius = radius
-        accessibilityIgnoresInvertColors = true
-        task = URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-            guard let data, let image = UIImage(data: data) else { return }
-            DispatchQueue.main.async { self?.image = image }
-        }
-        task?.resume()
-    }
-
-    required init?(coder: NSCoder) { nil }
-
-    deinit {
-        task?.cancel()
     }
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 — release QA and surface design
+
+- Refresh themed feedback, surveys, in-app messages and requests, with consistent navigation and keyboard-safe landscape layouts.
+- Preserve survey drafts and improve identity, consent, frequency-limit and queued-delivery handling.
+- Correct native JSON notification actions, requests consent checks and app-version reporting.
+
 ## 0.2.0 — aligned SDK release train
 
 - Align the Swift package and runtime version with the platform SDKs at 0.2.0. The APIs and durable instruction receipt protection from 0.1.7 are unchanged.

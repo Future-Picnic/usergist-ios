@@ -249,10 +249,23 @@ public final class UserGist {
         }
     }
 
+    /// Reports the host screen used by campaign allow/deny lists.
+    public func setScreenName(_ name: String?) {
+        withRuntime { $0.setScreenName(name) }
+    }
+
     /// Records a custom event.
     public func track(_ eventName: String, properties: [String: Any]? = nil) {
         withRuntime { rt in
             rt.track(eventName: eventName, properties: properties)
+        }
+    }
+
+    /// Reads the persisted consent choice after runtime initialization.
+    public func getConsent(completion: @escaping (Consent) -> Void) {
+        withRuntime { rt in
+            let consent = rt.consentStore.current()
+            DispatchQueue.main.async { completion(consent) }
         }
     }
 

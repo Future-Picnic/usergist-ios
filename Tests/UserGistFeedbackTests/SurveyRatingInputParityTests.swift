@@ -51,11 +51,13 @@ final class SurveyRatingInputParityTests: XCTestCase {
             return XCTFail("Expected five shared star buttons, found \(starButtons.count)")
         }
         XCTAssertTrue(starButtons.allSatisfy { $0.accessibilityLabel?.hasPrefix("Rate ") == true })
-        XCTAssertTrue(starButtons.allSatisfy { $0.bounds.height == 36 })
+        XCTAssertTrue(starButtons.allSatisfy { $0.bounds.height == 48 && $0.bounds.width == 48 })
         XCTAssertTrue(starButtons.prefix(4).allSatisfy {
             $0.titleColor(for: .normal) == ResolvedTheme.fallback.primary
         })
-        XCTAssertEqual(starButtons.last?.titleColor(for: .normal), ResolvedTheme.fallback.border)
+        // Unfilled stars are a quiet wash of the theme text, never a fixed grey.
+        XCTAssertEqual(starButtons.last?.titleColor(for: .normal),
+                       ResolvedTheme.fallback.text.withAlphaComponent(0.16))
     }
 
     func test_selectionIsRecordedBeforeDelayedAutoAdvance() {

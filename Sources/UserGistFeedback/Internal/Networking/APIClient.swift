@@ -93,6 +93,7 @@ final class APIClient {
         req.setValue("UserGistFeedback-iOS/\(sdkVersion)", forHTTPHeaderField: "User-Agent")
         req.setValue(sdkVersion, forHTTPHeaderField: "X-UserGist-SDK-Version")
         req.setValue("ios", forHTTPHeaderField: "X-UserGist-Platform")
+        req.setValue("push.json-open.v1", forHTTPHeaderField: "X-UserGist-Capabilities")
         credentialLock.lock()
         let sharedToken = subjectToken
         credentialLock.unlock()

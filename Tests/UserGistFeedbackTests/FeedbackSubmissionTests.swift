@@ -2,6 +2,44 @@ import XCTest
 @testable import UserGistFeedback
 
 final class FeedbackSubmissionTests: XCTestCase {
+    func testFeedbackSubmissionIncludesNativeContext() throws {
+        let payload = SubmitResponsePayload(
+            info: .init(promptId: "prompt", answers: [], dismissed: true, latencyMs: 10),
+            identity: .init(anonymousId: "anonymous-user", externalId: nil, properties: nil)
+        )
+        let encoded = try JSONEncoder.usergist().encode(payload)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertEqual(body["platform"] as? String, "ios")
+        XCTAssertEqual(body["sdkVersion"] as? String, UserGistConfig.currentSDKVersion)
+    }
+
+    func testFeedbackRetainsItsSubmissionContextWhenRestored() throws {
+        let payload = SubmitResponsePayload(
+            info: .init(promptId: "prompt", answers: [], dismissed: false, latencyMs: 10),
+            identity: .init(anonymousId: "anonymous-user", externalId: "account-a", properties: nil),
+            sdkVersion: "0.2.0",
+            appVersion: "9.2"
+        )
+        let restored = try JSONDecoder.usergist().decode(
+            SubmitResponsePayload.self, from: JSONEncoder.usergist().encode(payload)
+        )
+        XCTAssertEqual(restored.platform, "ios")
+        XCTAssertEqual(restored.sdkVersion, "0.2.0")
+        XCTAssertEqual(restored.appVersion, "9.2")
+        XCTAssertEqual(restored.idempotencyKey, payload.idempotencyKey)
+        XCTAssertEqual(restored.externalId, "account-a")
+    }
+
+    func testLegacyQueuedFeedbackStillDecodesWithoutDeviceContext() throws {
+        let legacy = Data(#"{"idempotencyKey":"retained-response-id","promptId":"prompt","anonymousId":"anonymous-user","answers":[],"dismissed":false,"latencyMs":10}"#.utf8)
+        let payload = try JSONDecoder.usergist().decode(SubmitResponsePayload.self, from: legacy)
+        let encoded = try JSONEncoder.usergist().encode(payload)
+        let restored = try JSONDecoder.usergist().decode(SubmitResponsePayload.self, from: encoded)
+        XCTAssertEqual(restored.idempotencyKey, "retained-response-id")
+        XCTAssertEqual(restored.anonymousId, "anonymous-user")
+        XCTAssertEqual(restored.dismissed, false)
+    }
+
     func testDismissalPreservesAnswersInEncodedSubmissionForBothIdentities() throws {
         for externalId in [nil, "identified-user"] as [String?] {
             let info = PromptResponseInfo(

@@ -2,14 +2,11 @@ import Foundation
 import SwiftUI
 import UIKit
 
-// PORTED FROM: packages/sdk-react-native/src/ui/RequestsBoard.tsx
-//                                    /RequestDetailView.tsx
-//                                    /SubmitRequestSheet.tsx
+// PORTED FROM: packages/sdk-react-native/src/ui/requests/{RequestsHost,shared}.ts(x)
 //
-// SwiftUI shells for the Feature Requests pillar. Minimal — matches the
-// RN surface (board / detail / submit) without the design polish, so the
-// API parity check can flip the cells to `full` while UX iterations
-// continue in follow-up work.
+// Hosts and models for the suggestions board. Views live in
+// RequestsBoardViews.swift and RequestDetailViews.swift. Every surface uses
+// the app's SDK theme with the requests branding accent as primary.
 
 @available(iOS 14.0, *)
 enum RequestsBoardHost {
@@ -27,28 +24,86 @@ enum RequestsBoardHost {
             logger.warn("RequestsBoardHost: no presentable view controller")
             return
         }
+        let themeModel = RequestsThemeModel(runtime: runtime)
         let model = RequestsBoardModel(runtime: runtime)
-        let view = RequestsBoardView(model: model, runtime: runtime, onDismiss: { [weak top] in
+        let view = RequestsBoardView(model: model, themeModel: themeModel, runtime: runtime, onDismiss: { [weak top] in
             top?.presentedViewController?.dismiss(animated: true)
         })
-        let host = UIHostingController(rootView: view)
-        host.modalPresentationStyle = .pageSheet
-        hosts.add(host)
-        top.present(host, animated: true)
+        show(UIHostingController(rootView: view), themeModel: themeModel, over: top)
         model.loadFirstPage()
     }
 
     static func presentDetail(runtime: Runtime, requestId: String) {
         guard let top = TopViewControllerLocator.topMost() else { return }
-        let view = RequestDetailContainer(runtime: runtime, requestId: requestId, onDismiss: { [weak top] in
+        let themeModel = RequestsThemeModel(runtime: runtime)
+        let view = RequestDetailContainer(runtime: runtime, requestId: requestId, themeModel: themeModel,
+                                          onDismiss: { [weak top] in
             top?.presentedViewController?.dismiss(animated: true)
         })
-        let host = UIHostingController(rootView: view)
+        show(UIHostingController(rootView: view), themeModel: themeModel, over: top)
+    }
+
+    private static func show(_ host: UIViewController, themeModel: RequestsThemeModel, over top: UIViewController) {
         host.modalPresentationStyle = .pageSheet
+        let apply: (ResolvedTheme) -> Void = { [weak host] theme in
+            host?.view.backgroundColor = theme.background
+            host?.overrideUserInterfaceStyle = theme.interfaceStyle
+        }
+        apply(themeModel.theme)
+        themeModel.onChange = apply
         hosts.add(host)
         top.present(host, animated: true)
     }
+}
 
+// MARK: - Theme
+
+/// App SDK theme + requests branding accent (RN `useRequestsTheme`).
+@available(iOS 14.0, *)
+final class RequestsThemeModel: ObservableObject {
+    static let fallbackAccent = "#5B4BFF"
+    static let fallbackTitle = "Suggestions"
+    /// Branding rarely changes; reuse it across presentations (main thread only).
+    private static var cachedBranding: RequestBranding?
+
+    @Published private(set) var theme: ResolvedTheme
+    @Published private(set) var title: String
+    var onChange: ((ResolvedTheme) -> Void)?
+    private var overrides: PromptTheme?
+
+    init(runtime: Runtime) {
+        let branding = Self.cachedBranding
+        theme = Self.resolve(overrides: nil, accent: branding?.accentColor)
+        title = Self.title(for: branding)
+        runtime.readThemeOverrides { [weak self] overrides in
+            self?.overrides = overrides
+            self?.apply()
+        }
+        guard branding == nil else { return }
+        runtime.getRequestBranding { [weak self] result in
+            DispatchQueue.main.async {
+                guard case .success(let value) = result else { return }
+                Self.cachedBranding = value
+                self?.apply()
+            }
+        }
+    }
+
+    private func apply() {
+        theme = Self.resolve(overrides: overrides, accent: Self.cachedBranding?.accentColor)
+        title = Self.title(for: Self.cachedBranding)
+        onChange?(theme)
+    }
+
+    static func resolve(overrides: PromptTheme?, accent: String?) -> ResolvedTheme {
+        let primary = accent.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackAccent
+        return ThemeResolver.resolve(server: PromptTheme(colors: .init(primary: primary)), override: overrides)
+    }
+
+    private static func title(for branding: RequestBranding?) -> String {
+        guard let label = branding?.entryLabel, !label.isEmpty else { return fallbackTitle }
+        return label
+    }
 }
 
 // MARK: - Board
@@ -61,6 +116,8 @@ final class RequestsBoardModel: ObservableObject {
     }
     @Published var nextCursor: String? = nil
     @Published var loading: Bool = false
+    @Published private(set) var loadFailed = false
+    @Published var notice: String?
     @Published private(set) var voteInFlight: Set<String> = []
 
     private let runtime: Runtime
@@ -93,13 +150,17 @@ final class RequestsBoardModel: ObservableObject {
 
     func loadFirstPage() {
         loading = true
+        loadFailed = false
         runtime.listRequests(options: GetRequestsOptions(sort: sort)) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.loading = false
-                if case .success(let page) = result {
+                switch result {
+                case .success(let page):
                     self.items = page.items
                     self.nextCursor = page.nextCursor
+                case .failure:
+                    self.loadFailed = self.items.isEmpty
                 }
             }
         }
@@ -110,10 +171,12 @@ final class RequestsBoardModel: ObservableObject {
               let row = items.first(where: { $0.id == requestId })
         else { return }
         voteInFlight.insert(requestId)
+        notice = nil
         runtime.voteOnRequest(requestId: requestId, vote: !row.viewerHasUpvoted) {
-            [weak self] _ in
+            [weak self] result in
             DispatchQueue.main.async {
                 self?.voteInFlight.remove(requestId)
+                if case .failure = result { self?.notice = "Your vote wasn't saved. Check your connection and try again." }
             }
         }
     }
@@ -136,125 +199,22 @@ final class RequestsBoardModel: ObservableObject {
     }
 }
 
-@available(iOS 14.0, *)
-struct RequestsBoardView: View {
-    @ObservedObject var model: RequestsBoardModel
-    let runtime: Runtime
-    let onDismiss: () -> Void
-    @State private var selectedRequestId: String?
-    @State private var showingSubmit = false
-
-    var body: some View {
-        Group {
-            if let requestId = selectedRequestId {
-                RequestDetailContainer(
-                    runtime: runtime,
-                    requestId: requestId,
-                    onDismiss: { selectedRequestId = nil }
-                )
-            } else if showingSubmit {
-                SubmitRequestView(
-                    runtime: runtime,
-                    onCancel: { showingSubmit = false },
-                    onPosted: { requestId in
-                        showingSubmit = false
-                        model.loadFirstPage()
-                        selectedRequestId = requestId
-                    }
-                )
-            } else {
-                board
-            }
-        }
-    }
-
-    private var board: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Button("Close", action: onDismiss)
-                    .accessibilityLabel("Close requests board")
-                Spacer()
-                Text("Feature requests")
-                    .font(.headline)
-                Spacer()
-                Button("+ New") { showingSubmit = true }
-                    .accessibilityLabel("Create new request")
-            }
-            TextField("Search", text: $model.query)
-                .textFieldStyle(.roundedBorder)
-            if model.loading && model.items.isEmpty {
-                ProgressView().padding(.top, 40)
-            }
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(model.items, id: \.id) { row in
-                        RequestRow(
-                            row: row,
-                            voteInFlight: model.voteInFlight.contains(row.id),
-                            onVote: { model.toggleVote(row.id) },
-                            onOpen: { selectedRequestId = row.id }
-                        )
-                    }
-                }
-            }
-        }
-        .padding(16)
-    }
-}
-
-@available(iOS 14.0, *)
-private struct RequestRow: View {
-    let row: RequestSummary
-    let voteInFlight: Bool
-    let onVote: () -> Void
-    let onOpen: () -> Void
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Button(action: onVote) {
-                VStack {
-                    Image(systemName: row.viewerHasUpvoted ? "chevron.up.circle.fill" : "chevron.up.circle")
-                        .font(.title3)
-                    Text("\(row.upvoteCount)")
-                        .font(.caption)
-                }
-            }
-            .buttonStyle(.plain)
-            .disabled(voteInFlight)
-            .accessibilityLabel(
-                voteInFlight ? "Updating vote for \(row.title)" :
-                    (row.viewerHasUpvoted ? "Remove vote from \(row.title)" : "Upvote \(row.title)")
-            )
-            Button(action: onOpen) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(row.title).font(.body).bold()
-                    Text(row.description).font(.caption).foregroundColor(.secondary).lineLimit(2)
-                    HStack(spacing: 8) {
-                        Text(row.status.rawValue.replacingOccurrences(of: "_", with: " "))
-                        Text("\(row.followerCount) followers")
-                    }
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open request \(row.title)")
-            Spacer()
-        }
-        .padding(.vertical, 6)
-    }
-}
-
 // MARK: - Detail
 
 @available(iOS 14.0, *)
 final class RequestDetailModel: ObservableObject {
+    static let commentMax = 1000
+
     @Published var request: FeatureRequest?
+    @Published private(set) var loadFailed = false
     @Published var comments: [RequestComment] = []
+    @Published private(set) var commentsLoading = true
     @Published var newCommentBody: String = ""
     @Published var postingComment = false
     @Published var commentError: String?
+    @Published var actionError: String?
+    @Published var editingCommentId: String?
+    @Published private(set) var savingEdit = false
     @Published private(set) var requestMutationInFlight = false
 
     private let runtime: Runtime
@@ -273,14 +233,21 @@ final class RequestDetailModel: ObservableObject {
     deinit { unsubscribeCache?() }
 
     func load() {
+        loadFailed = false
         runtime.getRequest(requestId: requestId) { [weak self] result in
-            if case .success(let req) = result {
-                DispatchQueue.main.async { self?.request = req }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let req): self.request = req
+                case .failure: self.loadFailed = self.request == nil
+                }
             }
         }
+        commentsLoading = true
         runtime.getComments(requestId: requestId) { [weak self] result in
-            if case .success(let items) = result {
-                DispatchQueue.main.async { self?.comments = items }
+            DispatchQueue.main.async {
+                self?.commentsLoading = false
+                if case .success(let items) = result { self?.comments = items }
             }
         }
     }
@@ -288,10 +255,12 @@ final class RequestDetailModel: ObservableObject {
     func toggleVote() {
         guard !requestMutationInFlight, let r = request else { return }
         requestMutationInFlight = true
+        actionError = nil
         runtime.voteOnRequest(requestId: r.id, vote: !r.viewerHasUpvoted) {
-            [weak self] _ in
+            [weak self] result in
             DispatchQueue.main.async {
                 self?.requestMutationInFlight = false
+                if case .failure = result { self?.actionError = "Your vote wasn't saved. Try again." }
             }
         }
     }
@@ -299,17 +268,19 @@ final class RequestDetailModel: ObservableObject {
     func toggleFollow() {
         guard !requestMutationInFlight, let r = request else { return }
         requestMutationInFlight = true
+        actionError = nil
         runtime.followRequest(requestId: r.id, follow: !r.viewerIsFollowing) {
-            [weak self] _ in
+            [weak self] result in
             DispatchQueue.main.async {
                 self?.requestMutationInFlight = false
+                if case .failure = result { self?.actionError = "Follow wasn't updated. Try again." }
             }
         }
     }
 
     func postComment() {
         let body = newCommentBody.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !postingComment, !body.isEmpty, body.count <= 1000 else { return }
+        guard !postingComment, !body.isEmpty, body.count <= Self.commentMax else { return }
         postingComment = true
         commentError = nil
         newCommentBody = ""
@@ -324,186 +295,84 @@ final class RequestDetailModel: ObservableObject {
                     }
                 case .failure(let error):
                     if self.newCommentBody.isEmpty { self.newCommentBody = body }
-                    self.commentError = error.localizedDescription
+                    self.commentError = "Your comment wasn't posted. \(error.localizedDescription)"
                 }
+            }
+        }
+    }
+
+    /// Optimistic edit; restores the previous text if the server rejects it.
+    func saveEdit(commentId: String, body: String) {
+        let clean = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !savingEdit, !clean.isEmpty, clean.count <= Self.commentMax,
+              let index = comments.firstIndex(where: { $0.id == commentId }) else { return }
+        let before = comments
+        let original = comments[index]
+        comments[index] = original.replacingBody(clean)
+        savingEdit = true
+        commentError = nil
+        runtime.editComment(requestId: requestId, commentId: commentId, body: clean) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.savingEdit = false
+                switch result {
+                case .success(let updated):
+                    self.comments = self.comments.map { $0.id == commentId ? updated : $0 }
+                    self.editingCommentId = nil
+                case .failure(let error):
+                    self.comments = before
+                    self.commentError = "Your edit wasn't saved. \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    /// Optimistic delete; puts the comment back if the server rejects it.
+    func deleteComment(commentId: String) {
+        let before = comments
+        comments = comments.filter { $0.id != commentId }
+        commentError = nil
+        runtime.deleteComment(requestId: requestId, commentId: commentId) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self, case .failure(let error) = result else { return }
+                self.comments = before
+                self.commentError = "The comment wasn't deleted. \(error.localizedDescription)"
             }
         }
     }
 }
 
+private extension RequestComment {
+    init(copying source: RequestComment, body: String, updatedAt: String) {
+        id = source.id
+        requestId = source.requestId
+        self.body = body
+        authorAnonymousId = source.authorAnonymousId
+        authorExternalId = source.authorExternalId
+        viewerIsAuthor = source.viewerIsAuthor
+        createdAt = source.createdAt
+        self.updatedAt = updatedAt
+    }
+
+    func replacingBody(_ body: String) -> RequestComment {
+        RequestComment(copying: self, body: body, updatedAt: ISO8601DateFormatter().string(from: Date()))
+    }
+}
+
 @available(iOS 14.0, *)
-private struct RequestDetailContainer: View {
+struct RequestDetailContainer: View {
     @StateObject private var model: RequestDetailModel
+    @ObservedObject var themeModel: RequestsThemeModel
     let onDismiss: () -> Void
 
-    init(runtime: Runtime, requestId: String, onDismiss: @escaping () -> Void) {
+    init(runtime: Runtime, requestId: String, themeModel: RequestsThemeModel, onDismiss: @escaping () -> Void) {
         _model = StateObject(wrappedValue: RequestDetailModel(runtime: runtime, requestId: requestId))
+        self.themeModel = themeModel
         self.onDismiss = onDismiss
     }
 
     var body: some View {
-        RequestDetailView(model: model, onDismiss: onDismiss)
+        RequestDetailView(model: model, theme: themeModel.theme, onDismiss: onDismiss)
             .onAppear { model.load() }
-    }
-}
-
-@available(iOS 14.0, *)
-struct RequestDetailView: View {
-    @ObservedObject var model: RequestDetailModel
-    let onDismiss: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Button("‹ Back", action: onDismiss)
-                    .accessibilityLabel("Back to requests")
-                Spacer()
-                Text("SUGGESTION")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Color.clear.frame(width: 48, height: 1)
-            }
-            if let r = model.request {
-                Text(r.title).font(.title3).bold()
-                Text(r.description).font(.body)
-                HStack(spacing: 12) {
-                    Button(action: model.toggleVote) {
-                        Label("\(r.upvoteCount)", systemImage: r.viewerHasUpvoted ? "chevron.up.circle.fill" : "chevron.up.circle")
-                    }
-                    .disabled(model.requestMutationInFlight)
-                    .accessibilityLabel(
-                        model.requestMutationInFlight ? "Updating request vote" :
-                            (r.viewerHasUpvoted ? "Remove request vote" : "Upvote request")
-                    )
-                    Button(action: model.toggleFollow) {
-                        Label("\(r.followerCount)", systemImage: r.viewerIsFollowing ? "bell.fill" : "bell")
-                    }
-                    .disabled(model.requestMutationInFlight)
-                    .accessibilityLabel(
-                        model.requestMutationInFlight ? "Updating request follow" :
-                            (r.viewerIsFollowing ? "Unfollow request" : "Follow request")
-                    )
-                }
-                if let dev = r.devResponse, !dev.isEmpty {
-                    Text(dev).font(.callout).padding(8).background(Color.gray.opacity(0.1)).cornerRadius(6)
-                }
-            } else {
-                ProgressView()
-            }
-            Divider()
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(model.comments) { c in
-                        VStack(alignment: .leading) {
-                            Text(c.viewerIsAuthor ? "You" : "Anonymous")
-                                .font(.caption).foregroundColor(.secondary)
-                            Text(c.body).font(.body)
-                        }
-                        .padding(.vertical, 4)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Request comment body: \(c.body)")
-                    }
-                }
-            }
-            HStack {
-                TextField("Add a comment", text: $model.newCommentBody)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("Request comment")
-                    .disabled(model.postingComment)
-                Button(model.postingComment ? "Posting…" : "Send", action: model.postComment)
-                    .accessibilityLabel(
-                        model.postingComment ? "Posting request comment" : "Post request comment"
-                    )
-                    .disabled(
-                        model.postingComment ||
-                            model.newCommentBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    )
-            }
-            if let commentError = model.commentError {
-                Text(commentError).font(.caption).foregroundColor(.red)
-            }
-        }
-        .padding(16)
-    }
-}
-
-// MARK: - Submit
-
-@available(iOS 14.0, *)
-private struct SubmitRequestView: View {
-    let runtime: Runtime
-    let onCancel: () -> Void
-    let onPosted: (String) -> Void
-
-    @State private var title = ""
-    @State private var description = ""
-    @State private var submitting = false
-    @State private var errorMessage: String?
-
-    private var canSubmit: Bool {
-        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !submitting && !cleanTitle.isEmpty && cleanTitle.count <= 120 &&
-            !cleanDescription.isEmpty && cleanDescription.count <= 1500
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Button("Cancel", action: onCancel)
-                Spacer()
-                Text("New suggestion").font(.headline)
-                Spacer()
-                Button(submitting ? "Posting…" : "Post", action: submit)
-                    .disabled(!canSubmit)
-                    .accessibilityLabel("Post")
-            }
-
-            Text("Tell us what you'd like to see. Other users can upvote your idea, and the team will respond as work progresses.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Text("Title").font(.caption).bold()
-            TextField("A short, clear title", text: $title)
-                .textFieldStyle(.roundedBorder)
-                .accessibilityLabel("Suggestion title")
-
-            HStack {
-                Text("Description").font(.caption).bold()
-                Spacer()
-                Text("\(description.count)/1500").font(.caption2).foregroundColor(.secondary)
-            }
-            TextEditor(text: $description)
-                .frame(minHeight: 140)
-                .padding(8)
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.35)))
-                .accessibilityLabel("Suggestion description")
-
-            if let errorMessage = errorMessage {
-                Text(errorMessage).font(.caption).foregroundColor(.red)
-            }
-            Spacer()
-        }
-        .padding(16)
-    }
-
-    private func submit() {
-        guard canSubmit else { return }
-        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
-        submitting = true
-        errorMessage = nil
-        runtime.submitRequest(title: cleanTitle, description: cleanDescription) { result in
-            DispatchQueue.main.async {
-                submitting = false
-                switch result {
-                case .success(let request):
-                    onPosted(request.id)
-                case .failure(let error):
-                    errorMessage = error.localizedDescription
-                }
-            }
-        }
     }
 }
