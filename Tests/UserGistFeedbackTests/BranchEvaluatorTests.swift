@@ -7,6 +7,25 @@ import XCTest
 // platform.
 final class BranchEvaluatorTests: XCTestCase {
 
+    func testNumericMembershipRejectsFractionsAndUnrepresentableValues() {
+        for number in [Double.nan, .infinity, -.infinity, .greatestFiniteMagnitude,
+                       Double(Int.max), -Double.greatestFiniteMagnitude, 2.5, -2.5] {
+            XCTAssertFalse(BranchEvaluator.evaluateBranchCondition(
+                .init(op: .includes, value: .double(number)), answer: .intArray([2, -2])))
+            XCTAssertTrue(BranchEvaluator.evaluateBranchCondition(
+                .init(op: .notIncludes, value: .double(number)), answer: .intArray([2, -2])))
+        }
+    }
+
+    func testNumericMembershipAcceptsExactIntegersIncludingLowerBoundary() {
+        for integer in [Int.min, -2, 0, 2] {
+            XCTAssertTrue(BranchEvaluator.evaluateBranchCondition(
+                .init(op: .includes, value: .double(Double(integer))), answer: .intArray([integer])))
+        }
+        XCTAssertTrue(BranchEvaluator.evaluateBranchCondition(
+            .init(op: .includes, value: .int(Int.max)), answer: .intArray([Int.max])))
+    }
+
     private func makeQuestion(
         id: String,
         type: SurveyQuestionKind,

@@ -128,20 +128,23 @@ enum Question: Codable, Equatable {
 
     func encode(to encoder: Encoder) throws {
         var kindContainer = encoder.container(keyedBy: CodingKeys.self)
-        var single = encoder.singleValueContainer()
+        // The discriminator and payload share one keyed object. Encoding the
+        // payload through a single-value container after writing `type` traps
+        // on older Foundation encoders instead of throwing a catchable error.
+        // Synthesized payload encoding reuses this encoder's keyed container.
         switch self {
         case .rating(let q):
             try kindContainer.encode(Kind.rating, forKey: .type)
-            try single.encode(q)
+            try q.encode(to: encoder)
         case .nps(let q):
             try kindContainer.encode(Kind.nps, forKey: .type)
-            try single.encode(q)
+            try q.encode(to: encoder)
         case .multipleChoice(let q):
             try kindContainer.encode(Kind.multipleChoice, forKey: .type)
-            try single.encode(q)
+            try q.encode(to: encoder)
         case .shortText(let q):
             try kindContainer.encode(Kind.shortText, forKey: .type)
-            try single.encode(q)
+            try q.encode(to: encoder)
         }
     }
 }

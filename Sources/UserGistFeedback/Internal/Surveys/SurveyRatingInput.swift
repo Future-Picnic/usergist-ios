@@ -23,7 +23,7 @@ struct SurveyRatingInput: UIViewRepresentable {
     }
 
     static func preferredHeight(for question: SurveyQuestion) -> CGFloat {
-        let count = max(2, question.scale ?? 5)
+        let count = promptQuestion(for: question).scale
         let rowSize = min(count, 5)
         let rowCount = Int(ceil(Double(count) / Double(rowSize)))
         let rowsHeight = CGFloat(rowCount * 36 + max(0, rowCount - 1) * 8)

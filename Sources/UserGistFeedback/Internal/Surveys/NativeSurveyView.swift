@@ -618,7 +618,7 @@ struct SurveyTextInput: View {
         self.accessibilityLabel = accessibilityLabel
         self.placeholder = placeholder
         self.longForm = longForm
-        self.maxLength = maxLength
+        self.maxLength = maxLength.flatMap { $0 > 0 ? $0 : nil }
         self.theme = theme
         self.onChange = onChange
     }
@@ -661,11 +661,16 @@ struct SurveyTextInput: View {
         Binding(
             get: { value },
             set: { next in
-                let clipped = maxLength.map { String(next.prefix($0)) } ?? next
+                let clipped = Self.limitedText(next, maxLength: maxLength)
                 value = clipped
                 onChange(clipped)
             }
         )
+    }
+
+    static func limitedText(_ text: String, maxLength: Int?) -> String {
+        guard let maxLength, maxLength > 0 else { return text }
+        return String(text.prefix(maxLength))
     }
 }
 
@@ -712,7 +717,7 @@ private struct SurveyUIKitTextView: UIViewRepresentable {
 }
 
 @available(iOS 14.0, *)
-private struct SurveyRankingInput: View {
+struct SurveyRankingInput: View {
     @State private var ordered: [SurveyChoice]
     let theme: ResolvedTheme
     let onChange: ([String]) -> Void
@@ -723,11 +728,21 @@ private struct SurveyRankingInput: View {
         theme: ResolvedTheme,
         onChange: @escaping ([String]) -> Void
     ) {
-        let byId = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
-        let restored = savedOrder.compactMap { byId[$0] }
-        _ordered = State(initialValue: restored.count == items.count ? restored : items)
+        _ordered = State(initialValue: Self.restoredItems(items, savedOrder: savedOrder))
         self.theme = theme
         self.onChange = onChange
+    }
+
+    static func restoredItems(_ items: [SurveyChoice], savedOrder: [String]) -> [SurveyChoice] {
+        var seen = Set<String>()
+        let unique = items.filter { !$0.id.isEmpty && seen.insert($0.id).inserted }
+        let byId = Dictionary(uniqueKeysWithValues: unique.map { ($0.id, $0) })
+        seen.removeAll()
+        let restored = savedOrder.compactMap { id -> SurveyChoice? in
+            guard seen.insert(id).inserted else { return nil }
+            return byId[id]
+        }
+        return restored + unique.filter { !seen.contains($0.id) }
     }
 
     var body: some View {
@@ -776,7 +791,7 @@ private struct SurveyRankingInput: View {
 }
 
 @available(iOS 14.0, *)
-private struct SurveyDateInput: View {
+struct SurveyDateInput: View {
     @State private var selected: Date
     let minimum: Date
     let maximum: Date
@@ -791,8 +806,12 @@ private struct SurveyDateInput: View {
         onChange: @escaping (String) -> Void
     ) {
         let formatter = Self.formatter
-        let min = minimum.flatMap(formatter.date) ?? formatter.date(from: "1900-01-01")!
-        let max = maximum.flatMap(formatter.date) ?? formatter.date(from: "2100-12-31")!
+        let lower = minimum.flatMap(formatter.date) ?? Date(timeIntervalSince1970: -2208988800)
+        let upper = maximum.flatMap(formatter.date) ?? Date(timeIntervalSince1970: 4133894400)
+        // DatePicker requires an ordered closed range, including for malformed
+        // server data or stale cached limits. Never construct a reversed range.
+        let min = Swift.min(lower, upper)
+        let max = Swift.max(lower, upper)
         let current = initial.isEmpty ? Date() : (formatter.date(from: initial) ?? Date())
         _selected = State(initialValue: Swift.max(min, Swift.min(current, max)))
         self.minimum = min

@@ -10,6 +10,8 @@ final class RatingQuestionView: UIView, QuestionView {
     private let stack = UIStackView()
     private var buttons: [UIButton] = []
     private var selectedValue: Int?
+    // Match the API's supported scales and bound allocation for malformed data.
+    private var scale: Int { question.scale == 10 ? 10 : 5 }
     var onValueChange: ((PromptAnswerValue) -> Void)?
 
     init(question: Question.Rating, theme: ResolvedTheme, initialValue: Int? = nil) {
@@ -42,7 +44,7 @@ final class RatingQuestionView: UIView, QuestionView {
             stack.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
 
-        let values = Array(1...max(2, question.scale))
+        let values = Array(1...scale)
         let rowSize = values.count > 5 ? 5 : values.count
         for start in stride(from: 0, to: values.count, by: rowSize) {
             let row = UIStackView()
@@ -117,7 +119,6 @@ final class RatingQuestionView: UIView, QuestionView {
     }
 
     func setSelectedValue(_ value: Int?) {
-        let scale = max(2, question.scale)
         selectedValue = value.flatMap { (1...scale).contains($0) ? $0 : nil }
         for button in buttons {
             switch displayMode {

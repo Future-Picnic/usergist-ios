@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.6 — question encoding and input safety
+
+- Fix a fatal Foundation encoder trap while persisting feedback questions. All four question types now encode their discriminator and payload into the same keyed object, preserving the existing flat JSON format and cached-data compatibility.
+- Bound rating controls and survey layout to the supported five- and ten-point scales, including when remote data contains extreme integers.
+- Handle duplicate ranking IDs, stale saved rankings, nonpositive survey text limits, and reversed date-picker bounds without trapping.
+- Reject fractional and out-of-range numeric membership conditions instead of truncating or trapping during survey branching.
+- Add regression tests for strict Foundation encoding, full question-field round trips, repeated cache saves and cold starts, corrupt caches, disk-write failures, and malformed input limits.
+- No integration API changes. The host app must update its SDK dependency and ship a new build for installed users to receive these fixes.
+
 ## 0.1.5 — preserve partial feedback answers
 
 - Keep answers already entered when a user closes a later question in a feedback prompt. The submission retains those answers together with `dismissed: true`.

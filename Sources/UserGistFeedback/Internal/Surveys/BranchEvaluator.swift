@@ -120,7 +120,11 @@ enum BranchEvaluator {
         case let (.intArray(arr), .int(n)):
             return arr.contains(n)
         case let (.intArray(arr), .double(n)):
-            return arr.contains(Int(n))
+            // Remote conditions may contain fractions or very large numbers.
+            // A trapping conversion must never take down the host app, and a
+            // fractional condition must not silently match a truncated integer.
+            guard let integer = Int(exactly: n) else { return false }
+            return arr.contains(integer)
         default:
             return false
         }
