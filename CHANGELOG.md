@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.7 — durable instruction receipts
+
+- Save instruction delivery state before requesting display. A failed receipt write now leaves the message undisplayed and available for retry instead of allowing a repeated impression.
+- Maximum-impressions enforcement also requires the coordinated API update. Update the Swift package and rebuild the host app to receive this SDK protection.
+
 ## 0.1.6 — question encoding and input safety
 
 - Fix a fatal Foundation encoder trap while persisting feedback questions. All four question types now encode their discriminator and payload into the same keyed object, preserving the existing flat JSON format and cached-data compatibility.

@@ -1392,7 +1392,6 @@ final class Runtime {
             for instruction in instructions where instruction.id > 0 {
                 handled.append(instruction.id)
                 guard !seenSet.contains(instruction.id) else { continue }
-                dispatchInstruction(instruction)
                 seen.append(instruction.id)
                 seenSet.insert(instruction.id)
                 if seen.count > 200 {
@@ -1403,6 +1402,9 @@ final class Runtime {
                     InstructionState(cursor: stored.cursor, seen: seen),
                     to: storage.instructionStateFile
                 )
+                // A failed receipt write must leave the message undisplayed
+                // so a later retry cannot produce a second impression.
+                dispatchInstruction(instruction)
             }
             guard !handled.isEmpty else {
                 finishInstructionPoll()
