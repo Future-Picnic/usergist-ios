@@ -17,7 +17,7 @@ struct UserGistConfig: Equatable {
     let triggerSyncInterval: TimeInterval
     let sdkVersion: String
 
-    static let currentSDKVersion = "0.1.7"
+    static let currentSDKVersion = "0.2.0"
     static let defaultMaxQueueBytes = 1_000_000 // 1 MB cap
 
     init(

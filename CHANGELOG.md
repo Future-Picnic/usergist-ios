@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0 — aligned SDK release train
+
+- Align the Swift package and runtime version with the platform SDKs at 0.2.0. The APIs and durable instruction receipt protection from 0.1.7 are unchanged.
+- Update the Swift package dependency and rebuild the host app to adopt the aligned release.
+
 ## 0.1.7 — durable instruction receipts
 
 - Save instruction delivery state before requesting display. A failed receipt write now leaves the message undisplayed and available for retry instead of allowing a repeated impression.
