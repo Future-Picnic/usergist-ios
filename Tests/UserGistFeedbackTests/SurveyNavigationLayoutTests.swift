@@ -5,10 +5,23 @@ import XCTest
 
 /// Approved survey navigation (2026-11-15): Back leading + Close trailing
 /// when Back is usable, otherwise Close leading with an empty trailing slot.
-/// Next/Submit and the end-screen action are one full-width footer action;
-/// Back is never a footer control. Orientation does not change the rule.
+/// Portrait retains the full-width footer. Landscape groups Close then Back
+/// and the compact primary action into the same header row.
 @MainActor
 final class SurveyNavigationLayoutTests: XCTestCase {
+    func testLandscapeGroupsCloseAndBackWithoutReservingFooterHeight() {
+        let question = SurveyNavigationLayout(canGoBack: true, isComplete: false, needsNext: true, landscape: true)
+        XCTAssertEqual(question.leading, .closeAndBack)
+        XCTAssertEqual(question.trailing, .next)
+        XCTAssertEqual(question.footer, .none)
+        let first = SurveyNavigationLayout(canGoBack: false, isComplete: false, needsNext: false, landscape: true)
+        XCTAssertEqual(first.leading, .close)
+        XCTAssertEqual(first.trailing, .empty)
+        let end = SurveyNavigationLayout(canGoBack: true, isComplete: true, needsNext: false, landscape: true)
+        XCTAssertEqual(end.leading, .close)
+        XCTAssertEqual(end.trailing, .endAction)
+        XCTAssertEqual(end.footer, .none)
+    }
     func testWithoutBackCloseIsLeadingAndTrailingIsEmpty() {
         let layout = SurveyNavigationLayout(canGoBack: false, isComplete: false, needsNext: true)
         XCTAssertEqual(layout.leading, .close)
@@ -64,9 +77,9 @@ final class SurveyNavigationLayoutTests: XCTestCase {
     /// Short landscape viewport (keyboard up; the hostless window adds 62/34pt
     /// insets, leaving an 80pt scroll between header and footer — tighter than
     /// a real landscape keyboard case): focusing the answer scrolls it
-    /// so its first line is visible in the scroll area, and the full-width
-    /// footer stays below it, still on screen. The title may scroll away.
-    func testShortLandscapeFocusRevealsFirstAnswerLineAboveFooter() throws {
+    /// so its first line is visible below the action header. The title may
+    /// scroll away; no footer consumes the remaining keyboard-safe space.
+    func testShortLandscapeFocusRevealsFirstAnswerLineBelowHeader() throws {
         let model = try makeModel(backNavigation: true)
         model.select(.string("work"), autoAdvance: true)
         let view = NativeSurveyView(viewModel: model, endScreen: nil, theme: .fallback,
@@ -94,10 +107,10 @@ final class SurveyNavigationLayoutTests: XCTestCase {
                                  "First answer line not under the footer (offset \(scroll.contentOffset.y), "
                                  + "visible \(visible), editor \(editor.convert(editor.bounds, to: host.view)), "
                                  + "insets \(host.view.safeAreaInsets), first responder \(editor.isFirstResponder))")
-        // The footer occupies the space between the scroll and the bottom edge.
+        // Landscape gives the scroll the space formerly reserved for a footer.
         let safeBottom = host.view.bounds.maxY - host.view.safeAreaInsets.bottom
-        XCTAssertGreaterThanOrEqual(safeBottom - visible.maxY, SurfaceMetrics.primaryMinHeight,
-                                    "Full-width footer has room below the scroll")
+        XCTAssertLessThanOrEqual(safeBottom - visible.maxY, 8,
+                                 "Landscape does not reserve a second action row")
     }
 
     private func descendants<T: UIView>(of root: UIView, type: T.Type) -> [T] {

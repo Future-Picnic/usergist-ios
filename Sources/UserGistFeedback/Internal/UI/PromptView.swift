@@ -5,9 +5,9 @@ import UIKit
 //
 // One question at a time, tap-to-select auto-advance, one Close. The sheet
 // background spans the full width; the header sits at the safe-area edges
-// (Close leading, step centred) and the scrolling question plus the
-// full-width Next/Submit footer share one centred 560pt readable column. The
-// footer sits outside the scroll and the sheet rides above the keyboard.
+// in portrait. Landscape puts Close, the centred step and compact Next/Submit
+// in one row aligned with the question's 560pt readable measure. Portrait's
+// full-width footer sits outside the scroll; the sheet rides above the keyboard.
 final class PromptView: UIView {
     enum Outcome {
         case submitted(answers: [PromptAnswerInfo])
@@ -28,6 +28,11 @@ final class PromptView: UIView {
     private lazy var closeButton = SurfaceIconButton(glyph: .close, color: theme.text)
     private lazy var nextButton = SurfacePrimaryButton(title: "Next", theme: theme)
     private var bottomPadding: NSLayoutConstraint?
+    private var measureMaxWidth: NSLayoutConstraint?
+    private var contentTop: NSLayoutConstraint?
+    private var portraitHeaderConstraints: [NSLayoutConstraint] = []
+    private var landscapeHeaderConstraints: [NSLayoutConstraint] = []
+    private var footerButtonConstraints: [NSLayoutConstraint] = []
     private var currentQuestionView: QuestionView?
     private var currentTitle: UILabel?
     private var currentSubtitle: UILabel?
@@ -41,7 +46,9 @@ final class PromptView: UIView {
 
     /// Window size and safe area before this view is on screen, so the first
     /// sheet frame already has the right height and orientation.
-    var layoutHint: (size: CGSize, insets: UIEdgeInsets)?
+    var layoutHint: (size: CGSize, insets: UIEdgeInsets)? {
+        didSet { applyEnvironment() }
+    }
 
     var onPreferredHeightChange: ((CGFloat) -> Void)? {
         didSet { reportPreferredHeight(force: true) }
@@ -133,25 +140,37 @@ final class PromptView: UIView {
         fullWidth.priority = .defaultHigh
         let bottom = measure.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -16)
         bottomPadding = bottom
-        NSLayoutConstraint.activate([
-            header.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+        let maximum = measure.widthAnchor.constraint(lessThanOrEqualToConstant: SurfaceMetrics.contentMaxWidth)
+        measureMaxWidth = maximum
+        let questionTop = content.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 4)
+        contentTop = questionTop
+        portraitHeaderConstraints = [
             header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            measure.topAnchor.constraint(equalTo: header.bottomAnchor),
-            measure.centerXAnchor.constraint(equalTo: centerXAnchor),
-            measure.widthAnchor.constraint(lessThanOrEqualToConstant: SurfaceMetrics.contentMaxWidth),
-            fullWidth,
-            bottom,
-            content.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 12),
-            content.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -12),
-            content.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 4),
-            content.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -20),
-            content.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -24),
+            header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12)
+        ]
+        landscapeHeaderConstraints = [
+            header.leadingAnchor.constraint(equalTo: measure.leadingAnchor, constant: 12),
+            header.trailingAnchor.constraint(equalTo: measure.trailingAnchor, constant: -12)
+        ]
+        footerButtonConstraints = [
             nextButton.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 12),
             nextButton.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -12),
             nextButton.topAnchor.constraint(equalTo: footer.topAnchor, constant: 4),
             nextButton.bottomAnchor.constraint(equalTo: footer.bottomAnchor)
-        ])
+        ]
+        NSLayoutConstraint.activate([
+            header.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            measure.topAnchor.constraint(equalTo: header.bottomAnchor),
+            measure.centerXAnchor.constraint(equalTo: centerXAnchor),
+            maximum,
+            fullWidth,
+            bottom,
+            content.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 12),
+            content.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -12),
+            questionTop,
+            content.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -20),
+            content.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -24)
+        ] + portraitHeaderConstraints + footerButtonConstraints)
         // The scroll region gives up height first; header and footer stay put.
         scroll.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         footer.setContentCompressionResistancePriority(.required, for: .vertical)
@@ -173,38 +192,58 @@ final class PromptView: UIView {
         bottomPadding?.constant = -max(environmentBottomInset, isLandscape ? 12 : 16)
         guard landscape != isLandscape else { return }
         landscape = isLandscape
+        NSLayoutConstraint.deactivate(isLandscape ? portraitHeaderConstraints : landscapeHeaderConstraints)
+        NSLayoutConstraint.activate(isLandscape ? landscapeHeaderConstraints : portraitHeaderConstraints)
+        // Landscape's content padding is outside the 560pt readable measure.
+        measureMaxWidth?.constant = SurfaceMetrics.contentMaxWidth + (isLandscape ? 24 : 0)
+        contentTop?.constant = isLandscape ? 8 : 4
+        closeButton.size = isLandscape ? .regular : .small
+        header.balancedSides = isLandscape
         placeActions()
     }
 
-    /// Feedback has no Back: Close stays leading and the trailing slot stays
-    /// empty. Next/Submit is one full-width footer action in both
-    /// orientations; the sheet sits above the keyboard, so the footer does too.
+    /// Deactivate footer constraints before reparenting the one primary action.
+    /// Restoring portrait recreates the same full-width footer above the keyboard.
     private func placeActions() {
         guard prompt.questions.indices.contains(index) else { return }
         let needsNext = PromptFlow.needsExplicitNext(prompt.questions[index])
+        let isLandscape = landscape == true
+        NSLayoutConstraint.deactivate(footerButtonConstraints)
         header.setTrailing([])
-        nextButton.compact = false
+        nextButton.removeFromSuperview()
+        nextButton.compact = isLandscape
         nextButton.isHidden = !needsNext
-        footer.isHidden = !needsNext
+        footer.isHidden = isLandscape || !needsNext
+        if needsNext {
+            if isLandscape {
+                header.setTrailing([nextButton])
+            } else {
+                footer.addSubview(nextButton)
+                NSLayoutConstraint.activate(footerButtonConstraints)
+            }
+        }
         setNeedsLayout()
     }
 
-    /// Width the question actually gets: sheet minus 12pt edges, capped to the
-    /// 560pt column, minus the column's 12pt content padding.
-    static func contentWidth(forSheetWidth width: CGFloat) -> CGFloat {
-        max(0, min(max(0, width - 24), SurfaceMetrics.contentMaxWidth) - 24)
+    /// Portrait keeps its existing column; landscape gives the input the full
+    /// 560pt measure and aligns both header edges with the input's outer edges.
+    static func contentWidth(forSheetWidth width: CGFloat, landscape: Bool = false) -> CGFloat {
+        let maximum = SurfaceMetrics.contentMaxWidth + (landscape ? 24 : 0)
+        return max(0, min(max(0, width - 24), maximum) - 24)
     }
 
     private var expectedContentWidth: CGFloat {
-        Self.contentWidth(forSheetWidth: bounds.width > 0 ? bounds.width : environmentSize.width)
+        Self.contentWidth(forSheetWidth: bounds.width > 0 ? bounds.width : environmentSize.width,
+                          landscape: environmentSize.width > environmentSize.height)
     }
 
     /// Natural sheet height: header, question, footer and bottom padding.
     func preferredHeight(forWidth width: CGFloat) -> CGFloat {
+        applyEnvironment()
         let size = environmentSize
         let isLandscape = size.width > size.height
         let column = min(max(0, width - 24), SurfaceMetrics.contentMaxWidth)
-        let fitting = CGSize(width: Self.contentWidth(forSheetWidth: width),
+        let fitting = CGSize(width: Self.contentWidth(forSheetWidth: width, landscape: isLandscape),
                              height: UIView.layoutFittingCompressedSize.height)
         // Measure NPS in the layout it will actually use at this width.
         (currentQuestionView as? NpsQuestionView)?.wide = NpsQuestionView.isWide(contentWidth: fitting.width)
@@ -212,7 +251,7 @@ final class PromptView: UIView {
             fitting, withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel
         ).height ?? 0
         let headerHeight = max(SurfaceMetrics.headerMinHeight, header.systemLayoutSizeFitting(
-            CGSize(width: max(0, width - 24), height: 0),
+            CGSize(width: isLandscape ? fitting.width : max(0, width - 24), height: 0),
             withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel
         ).height)
         var footerHeight: CGFloat = 0
@@ -223,7 +262,7 @@ final class PromptView: UIView {
             ).height
         }
         let bottom = max(environmentBottomInset, isLandscape ? 12 : 16)
-        return ceil(8 + headerHeight + question + 24 + footerHeight + bottom)
+        return ceil(8 + headerHeight + question + (isLandscape ? 28 : 24) + footerHeight + bottom)
     }
 
     private func reportPreferredHeight(force: Bool) {

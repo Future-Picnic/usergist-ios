@@ -185,31 +185,37 @@ final class NativeSurveyViewModel: ObservableObject {
     }
 }
 
-/// Where the survey's navigation controls live. Orientation-independent:
-/// portrait and landscape share one rule. Leading/trailing follow the
-/// layout direction (SwiftUI mirrors them in RTL).
+/// Approved navigation slots. Landscape groups Close then Back at the leading
+/// edge and moves the primary action into the same row. Portrait retains its
+/// full-width footer. Leading/trailing follow the layout direction.
 struct SurveyNavigationLayout: Equatable {
-    enum Slot: Equatable { case back, close, empty }
+    enum Slot: Equatable { case back, close, closeAndBack, next, endAction, empty }
     enum Footer: Equatable { case next, endAction, none }
 
     let leading: Slot
     let trailing: Slot
     let footer: Footer
 
-    init(canGoBack: Bool, isComplete: Bool, needsNext: Bool) {
+    init(canGoBack: Bool, isComplete: Bool, needsNext: Bool, landscape: Bool = false) {
         let showBack = canGoBack && !isComplete
-        leading = showBack ? .back : .close
-        trailing = showBack ? .close : .empty
-        footer = isComplete ? .endAction : (needsNext ? .next : .none)
+        if landscape {
+            leading = showBack ? .closeAndBack : .close
+            trailing = isComplete ? .endAction : (needsNext ? .next : .empty)
+            footer = .none
+        } else {
+            leading = showBack ? .back : .close
+            trailing = showBack ? .close : .empty
+            footer = isComplete ? .endAction : (needsNext ? .next : .none)
+        }
     }
 }
 
 // PORTED FROM: packages/sdk-react-native/src/ui/SurveyView.tsx
 //
 // Full-screen survey. Header: Back leading + Close trailing when Back is
-// usable, otherwise Close leading; progress centred. Next/Submit (or the
-// end-screen action) is one full-width footer action in both orientations,
-// outside the scroll and above the keyboard.
+// usable, otherwise Close leading; progress centred. Landscape groups Close
+// then Back leading, with compact Next/Submit or the end CTA trailing in one
+// readable header row. Portrait keeps the full-width footer above the keyboard.
 @available(iOS 14.0, *)
 struct NativeSurveyView: View {
     @ObservedObject var viewModel: NativeSurveyViewModel
@@ -229,24 +235,28 @@ struct NativeSurveyView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let landscape = geometry.size.width > geometry.size.height
+            // Include the keyboard safe area so opening it in portrait cannot
+            // turn a short available content region into landscape navigation.
+            let landscape = geometry.size.width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing
+                > geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom
             VStack(spacing: 0) {
-                header()
-                    .padding(.horizontal, 12)
+                header(landscape: landscape)
+                    .frame(maxWidth: landscape ? SurfaceMetrics.contentMaxWidth : .infinity)
+                    .padding(.horizontal, landscape ? 24 : 12)
+                    .frame(maxWidth: .infinity)
                     .padding(.top, landscape ? 8 : 4)
                     .padding(.bottom, 4)
                 // NPS layout follows the content column (560pt cap, 24pt
                 // side padding), not the window — same rule as the sheet.
                 content(landscape: landscape, wide: NpsQuestionView.isWide(
                     contentWidth: min(max(0, geometry.size.width - 48), SurfaceMetrics.contentMaxWidth)))
-                // Outside the scroll, inside the keyboard-adjusted safe area:
-                // the footer rides above the keyboard in both orientations,
-                // centred in the same readable column as the question.
-                if let footer = footerActions {
+                // Portrait's full-width action stays outside the scroll and
+                // inside the keyboard-adjusted safe area. No landscape footer.
+                if let footer = footerActions(landscape: landscape) {
                     footer
                         .frame(maxWidth: SurfaceMetrics.contentMaxWidth)
                         .padding(.horizontal, 24)
-                        .padding(.top, landscape ? 6 : 8)
+                        .padding(.top, 8)
                         .padding(.bottom, max(8, 16 - geometry.safeAreaInsets.bottom))
                         .frame(maxWidth: .infinity)
                 }
@@ -275,31 +285,45 @@ struct NativeSurveyView: View {
 
     // MARK: Header and actions
 
-    private var navigation: SurveyNavigationLayout {
+    private func navigation(landscape: Bool) -> SurveyNavigationLayout {
         SurveyNavigationLayout(
             canGoBack: viewModel.canGoBack,
             isComplete: viewModel.isComplete,
-            needsNext: viewModel.currentQuestion.map(needsNextButton) ?? false
+            needsNext: viewModel.currentQuestion.map(needsNextButton) ?? false,
+            landscape: landscape
         )
     }
 
-    /// With a usable Back: Back leading, Close trailing. Without Back
-    /// (first question, history empty, end screen): Close leading, trailing empty.
-    private func header() -> some View {
-        let layout = navigation
+    private func header(landscape: Bool) -> some View {
+        let layout = navigation(landscape: landscape)
         return SurfaceHeaderBar(
+            balancedSides: landscape && !viewModel.isComplete,
             leading: {
-                if layout.leading == .back { backButton } else { closeButton }
+                headerControls(layout.leading, landscape: landscape)
             },
             center: { progress.frame(maxWidth: 320).padding(.horizontal, 8) },
             trailing: {
-                if layout.trailing == .close { closeButton }
+                headerControls(layout.trailing, landscape: landscape)
             }
         )
     }
 
-    private var closeButton: some View {
-        SurfaceIconView(glyph: .close, color: theme.text, label: "Close survey") {
+    @ViewBuilder private func headerControls(_ slot: SurveyNavigationLayout.Slot, landscape: Bool) -> some View {
+        switch slot {
+        case .back: backButton(landscape: landscape)
+        case .close: closeButton(landscape: landscape)
+        case .closeAndBack:
+            closeButton(landscape: landscape)
+            backButton(landscape: landscape)
+        case .next: nextButton(compact: true)
+        case .endAction: endAction(compact: true)
+        case .empty: EmptyView()
+        }
+    }
+
+    private func closeButton(landscape: Bool) -> some View {
+        SurfaceIconView(glyph: .close, color: theme.text, label: "Close survey",
+                        size: landscape ? .regular : .small) {
             if viewModel.isComplete { onClose() } else { confirmingAbandon = true }
         }
         .disabled(abandoning)
@@ -307,34 +331,33 @@ struct NativeSurveyView: View {
 
     /// Back stays in place (disabled) while submitting so Close does not jump
     /// sides mid-request; `goBack` already refuses while submitting.
-    private var backButton: some View {
-        SurfaceIconView(glyph: .back, color: theme.text, label: "Back", action: viewModel.goBack)
+    private func backButton(landscape: Bool) -> some View {
+        SurfaceIconView(glyph: .back, color: theme.text, label: "Back",
+                        size: landscape ? .regular : .small, action: viewModel.goBack)
             .disabled(viewModel.isSubmitting)
     }
 
-    private var nextButton: some View {
+    private func nextButton(compact: Bool) -> some View {
         SurfacePrimaryButtonView(
             title: viewModel.isFinalQuestion ? "Submit" : "Next",
             theme: theme,
             disabled: !viewModel.canAdvanceCurrentQuestion,
             loading: viewModel.isSubmitting,
-            compact: false,
-            fillWidth: true,
+            compact: compact,
+            fillWidth: !compact,
             action: viewModel.advance
         )
     }
 
-    private var endAction: some View {
+    private func endAction(compact: Bool) -> some View {
         SurfacePrimaryButtonView(title: endScreen?.cta?.label ?? "Done", theme: theme,
-                                 compact: false, fillWidth: true, action: openEndAction)
+                                 compact: compact, fillWidth: !compact, action: openEndAction)
     }
 
-    /// Footer in both orientations: one full-width Next/Submit, or the
-    /// end-screen action. Back never lives here; it is in the header.
-    private var footerActions: AnyView? {
-        switch navigation.footer {
-        case .endAction: return AnyView(endAction)
-        case .next: return AnyView(nextButton)
+    private func footerActions(landscape: Bool) -> AnyView? {
+        switch navigation(landscape: landscape).footer {
+        case .endAction: return AnyView(endAction(compact: false))
+        case .next: return AnyView(nextButton(compact: false))
         case .none: return nil
         }
     }
@@ -369,7 +392,7 @@ struct NativeSurveyView: View {
 
     /// Short landscape + keyboard leaves a tiny scroll viewport. When the
     /// answer field is focused (or the keyboard settles/resizes), scroll the
-    /// field to the top so its first line shows above the footer; the
+    /// field to the top so its first line shows in the scroll viewport; the
     /// question title may scroll away. Same helper as the request composer.
     private func content(landscape: Bool, wide: Bool) -> some View {
         GeometryReader { viewport in
@@ -382,6 +405,9 @@ struct NativeSurveyView: View {
                         FocusedFieldReveal.reveal($0, in: proxy, reduceMotion: true)
                     }
                     .onChange(of: keyboard.settledFrames) { _ in
+                        FocusedFieldReveal.reveal(focusedAnswer, in: proxy, reduceMotion: true)
+                    }
+                    .onChange(of: viewport.size) { _ in
                         FocusedFieldReveal.reveal(focusedAnswer, in: proxy, reduceMotion: true)
                     }
             }

@@ -92,6 +92,17 @@ enum SurfaceMetrics {
     static let compactMinHeight: CGFloat = 44
     static let compactMinWidth: CGFloat = 88
     static let trailingMaxWidth: CGFloat = 320
+    static let balancedHeaderSide: CGFloat = iconHit * 2 + 8
+}
+
+/// Survey/feedback landscape opts into the larger face; other surfaces retain
+/// the small face and every size keeps the native 44pt touch target.
+enum SurfaceIconSize {
+    case small, regular
+
+    var face: CGFloat { self == .regular ? SurfaceMetrics.compactMinHeight : SurfaceMetrics.iconFace }
+    var glyphScale: CGFloat { self == .regular ? 16 / 13 : 1 }
+    var stroke: CGFloat { self == .regular ? 2 : 1.75 }
 }
 
 extension ResolvedTheme {

@@ -19,20 +19,23 @@ struct SurfaceIconView: View {
     let glyph: Glyph
     let color: UIColor
     var label: String?
+    var size: SurfaceIconSize = .small
     let action: () -> Void
 
-    private var stroke: StrokeStyle { StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round) }
+    private var stroke: StrokeStyle { StrokeStyle(lineWidth: size.stroke, lineCap: .round, lineJoin: .round) }
 
     var body: some View {
         Button(action: action) {
             ZStack {
                 Circle().fill(Color(color.withAlphaComponent(0.08)))
-                    .frame(width: SurfaceMetrics.iconFace, height: SurfaceMetrics.iconFace)
+                    .frame(width: size.face, height: size.face)
                 if glyph == .close {
-                    CrossShape().stroke(Color(color), style: stroke).frame(width: 9.2, height: 9.2)
+                    CrossShape().stroke(Color(color), style: stroke)
+                        .frame(width: 9.2 * size.glyphScale, height: 9.2 * size.glyphScale)
                 } else {
                     ChevronShape(direction: .left).stroke(Color(color), style: stroke)
-                        .frame(width: 4.5, height: 9).offset(x: -0.5)
+                        .frame(width: 4.5 * size.glyphScale, height: 9 * size.glyphScale)
+                        .offset(x: -0.5 * size.glyphScale)
                 }
             }
             .frame(width: SurfaceMetrics.iconHit, height: SurfaceMetrics.iconHit)
@@ -445,26 +448,30 @@ struct SurfaceHeaderBar<Leading: View, Center: View, Trailing: View>: View {
     let leading: Leading
     let center: Center
     let trailing: Trailing
+    let balancedSides: Bool
 
-    init(@ViewBuilder leading: () -> Leading, @ViewBuilder center: () -> Center,
+    init(balancedSides: Bool = false, @ViewBuilder leading: () -> Leading, @ViewBuilder center: () -> Center,
          @ViewBuilder trailing: () -> Trailing) {
         self.leading = leading()
         self.center = center()
         self.trailing = trailing()
+        self.balancedSides = balancedSides
     }
 
     var body: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 4) { leading }
-                .frame(minWidth: SurfaceMetrics.iconHit, alignment: .leading)
+            HStack(spacing: balancedSides ? 8 : 4) { leading }
+                .frame(minWidth: balancedSides ? SurfaceMetrics.balancedHeaderSide : SurfaceMetrics.iconHit,
+                       alignment: .leading)
                 .layoutPriority(2)
             // Color.clear keeps the centre slot flexible even when it is empty,
             // so Close stays leading and actions stay trailing.
             ZStack { Color.clear.frame(height: 1); center }.frame(maxWidth: .infinity)
             // Ideal width clamped to 320pt: short actions hug their label,
             // long labels wrap inside the cap. The centre gives up width first.
-            HStack(spacing: 4) { trailing }
-                .frame(minWidth: SurfaceMetrics.iconHit, maxWidth: SurfaceMetrics.trailingMaxWidth,
+            HStack(spacing: balancedSides ? 8 : 4) { trailing }
+                .frame(minWidth: balancedSides ? SurfaceMetrics.balancedHeaderSide : SurfaceMetrics.iconHit,
+                       maxWidth: SurfaceMetrics.trailingMaxWidth,
                        alignment: .trailing)
                 .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(1)

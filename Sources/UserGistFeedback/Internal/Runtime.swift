@@ -1732,6 +1732,10 @@ final class Runtime {
             purpose: .feedback,
             payload: data
            ) != nil {
+            if !info.dismissed {
+                presenter.showSavedNotice(promptId: info.promptId,
+                    isValid: presentationEligibility.validator(for: .feedback))
+            }
             flushMutations()
         } else {
             logger.warn("feedback response could not be persisted")

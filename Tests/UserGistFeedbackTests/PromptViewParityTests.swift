@@ -29,22 +29,22 @@ final class PromptViewParityTests: XCTestCase {
         let visible = scroll.convert(scroll.bounds, to: view)
         XCTAssertGreaterThanOrEqual(caret.minY, visible.minY)
         XCTAssertLessThanOrEqual(caret.maxY, visible.maxY)
-        // Landscape with the keyboard up (170pt sheet): Submit is the one
-        // full-width footer action below the scrolling answer, still inside
-        // the sheet (which rides above the keyboard), never in the header.
+        // The compact header stays above the scrolling answer in a 170pt
+        // keyboard-safe landscape sheet, with no footer taking another row.
         let submit = try XCTUnwrap(buttons(in: view).first { $0.title(for: .normal) == "Submit" })
         let submitFrame = submit.convert(submit.bounds, to: view)
         XCTAssertFalse(submit.isHidden)
-        XCTAssertEqual((submit as? SurfacePrimaryButton)?.compact, false, "Landscape uses the full-size footer action")
-        XCTAssertGreaterThanOrEqual(submitFrame.minY, visible.maxY - 0.5, "Footer sits below the scroll")
-        XCTAssertLessThanOrEqual(submitFrame.maxY, view.bounds.maxY, "Footer stays inside the keyboard-safe sheet")
-        let column = min(view.bounds.width - 24, SurfaceMetrics.contentMaxWidth)
-        XCTAssertEqual(submitFrame.width, column - 24, accuracy: 1, "Full width of the readable column")
-        XCTAssertEqual(submitFrame.midX, view.bounds.midX, accuracy: 1, "Centred in landscape")
+        XCTAssertEqual((submit as? SurfacePrimaryButton)?.compact, true)
+        XCTAssertLessThanOrEqual(submitFrame.maxY, visible.minY + 0.5, "Submit is above the scroll")
+        XCTAssertLessThan(submitFrame.width, 150, "Compact header action")
+        let fieldFrame = editor.convert(editor.bounds, to: view)
+        XCTAssertEqual(submitFrame.maxX, fieldFrame.maxX, accuracy: 1, "Input and header right edges align")
         let close = try XCTUnwrap(buttons(in: view).first { $0.accessibilityLabel == "Close" })
         let closeFrame = close.convert(close.bounds, to: view)
         XCTAssertLessThan(closeFrame.midX, view.bounds.midX, "Feedback has no Back: Close stays leading")
         XCTAssertLessThanOrEqual(closeFrame.maxY, visible.minY)
+        XCTAssertEqual(closeFrame.minX, fieldFrame.minX, accuracy: 1, "Input and header left edges align")
+        XCTAssertEqual(closeFrame.height, submitFrame.height, accuracy: 1, "Visible landscape controls share a height")
         XCTAssertFalse(buttons(in: view).contains { $0.accessibilityLabel == "Back" })
     }
 

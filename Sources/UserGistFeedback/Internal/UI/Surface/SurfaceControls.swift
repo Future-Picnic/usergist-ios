@@ -10,36 +10,47 @@ import UIKit
 //   - Landscape: the primary action moves to the trailing side of the header,
 //     so the content and the keyboard keep the remaining height.
 
-/// Close (drawn thin cross) or Back (drawn chevron) on a 32pt themed wash,
-/// inside a 44pt touch target.
+/// Close or Back on a themed wash, inside a 44pt touch target. The regular
+/// face is opt-in for compact landscape survey/feedback headers.
 final class SurfaceIconButton: UIButton {
     enum Glyph { case close, back }
 
     private let face = UIView()
     private let glyphLayer = CAShapeLayer()
     private let glyph: Glyph
+    private var faceDimensions: [NSLayoutConstraint] = []
 
-    init(glyph: Glyph, color: UIColor, label: String? = nil) {
+    var size: SurfaceIconSize {
+        didSet {
+            faceDimensions.forEach { $0.constant = size.face }
+            setNeedsLayout()
+        }
+    }
+
+    init(glyph: Glyph, color: UIColor, label: String? = nil, size: SurfaceIconSize = .small) {
         self.glyph = glyph
+        self.size = size
         super.init(frame: .zero)
         accessibilityLabel = label ?? (glyph == .close ? "Close" : "Back")
         face.isUserInteractionEnabled = false
         face.backgroundColor = color.withAlphaComponent(0.08)
-        face.layer.cornerRadius = SurfaceMetrics.iconFace / 2
+        face.layer.cornerRadius = size.face / 2
         face.translatesAutoresizingMaskIntoConstraints = false
         addSubview(face)
         glyphLayer.strokeColor = color.cgColor
         glyphLayer.fillColor = UIColor.clear.cgColor
-        glyphLayer.lineWidth = 1.75
+        glyphLayer.lineWidth = size.stroke
         glyphLayer.lineCap = .round
         glyphLayer.lineJoin = .round
         face.layer.addSublayer(glyphLayer)
         translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
+        faceDimensions = [
+            face.widthAnchor.constraint(equalToConstant: size.face),
+            face.heightAnchor.constraint(equalToConstant: size.face)
+        ]
+        NSLayoutConstraint.activate(faceDimensions + [
             widthAnchor.constraint(equalToConstant: SurfaceMetrics.iconHit),
             heightAnchor.constraint(equalToConstant: SurfaceMetrics.iconHit),
-            face.widthAnchor.constraint(equalToConstant: SurfaceMetrics.iconFace),
-            face.heightAnchor.constraint(equalToConstant: SurfaceMetrics.iconFace),
             face.centerXAnchor.constraint(equalTo: centerXAnchor),
             face.centerYAnchor.constraint(equalTo: centerYAnchor)
         ])
@@ -53,17 +64,19 @@ final class SurfaceIconButton: UIButton {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let c = CGPoint(x: SurfaceMetrics.iconFace / 2, y: SurfaceMetrics.iconFace / 2)
+        face.layer.cornerRadius = size.face / 2
+        glyphLayer.lineWidth = size.stroke
+        let c = CGPoint(x: size.face / 2, y: size.face / 2)
         let path = UIBezierPath()
         switch glyph {
         case .close:
-            let h: CGFloat = 13 / (2 * 2.squareRoot())
+            let h: CGFloat = 13 * size.glyphScale / (2 * 2.squareRoot())
             path.move(to: CGPoint(x: c.x - h, y: c.y - h))
             path.addLine(to: CGPoint(x: c.x + h, y: c.y + h))
             path.move(to: CGPoint(x: c.x + h, y: c.y - h))
             path.addLine(to: CGPoint(x: c.x - h, y: c.y + h))
         case .back:
-            let s: CGFloat = 4.5
+            let s: CGFloat = 4.5 * size.glyphScale
             path.move(to: CGPoint(x: c.x + s * 0.5, y: c.y - s))
             path.addLine(to: CGPoint(x: c.x - s * 0.5, y: c.y))
             path.addLine(to: CGPoint(x: c.x + s * 0.5, y: c.y + s))
@@ -219,6 +232,17 @@ final class SurfaceHeaderView: UIView {
     let leading = UIStackView()
     let centerSlot = UIView()
     let trailing = UIStackView()
+    private var sideMinimums: [NSLayoutConstraint] = []
+
+    var balancedSides = false {
+        didSet {
+            sideMinimums.forEach {
+                $0.constant = balancedSides ? SurfaceMetrics.balancedHeaderSide : SurfaceMetrics.iconHit
+            }
+            leading.spacing = balancedSides ? 8 : 4
+            trailing.spacing = balancedSides ? 8 : 4
+        }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -237,14 +261,16 @@ final class SurfaceHeaderView: UIView {
         row.spacing = 8
         row.translatesAutoresizingMaskIntoConstraints = false
         addSubview(row)
-        NSLayoutConstraint.activate([
+        sideMinimums = [
+            leading.widthAnchor.constraint(greaterThanOrEqualToConstant: SurfaceMetrics.iconHit),
+            trailing.widthAnchor.constraint(greaterThanOrEqualToConstant: SurfaceMetrics.iconHit)
+        ]
+        NSLayoutConstraint.activate(sideMinimums + [
             row.leadingAnchor.constraint(equalTo: leadingAnchor),
             row.trailingAnchor.constraint(equalTo: trailingAnchor),
             row.topAnchor.constraint(equalTo: topAnchor),
             row.bottomAnchor.constraint(equalTo: bottomAnchor),
             heightAnchor.constraint(greaterThanOrEqualToConstant: SurfaceMetrics.headerMinHeight),
-            leading.widthAnchor.constraint(greaterThanOrEqualToConstant: SurfaceMetrics.iconHit),
-            trailing.widthAnchor.constraint(greaterThanOrEqualToConstant: SurfaceMetrics.iconHit),
             trailing.widthAnchor.constraint(lessThanOrEqualToConstant: SurfaceMetrics.trailingMaxWidth)
         ])
     }
