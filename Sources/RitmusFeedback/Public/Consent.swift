@@ -10,14 +10,22 @@ public struct Consent: Codable, Equatable, Sendable {
     public var analytics: Bool?
     /// Permission to render feedback prompts and submit responses.
     public var feedback: Bool?
+    /// Permission to register a device token and receive push notifications.
+    public var push: Bool?
 
-    public init(analytics: Bool? = nil, feedback: Bool? = nil) {
+    public init(analytics: Bool? = nil, feedback: Bool? = nil, push: Bool? = nil) {
         self.analytics = analytics
         self.feedback = feedback
+        self.push = push
     }
 
     /// Whether the transport layer may ship data to the backend.
     public var allowsTransport: Bool {
         feedback == true
+    }
+
+    /// Whether the SDK may register a device token and accept pushes.
+    public var allowsPush: Bool {
+        push == true
     }
 }

@@ -9,4 +9,9 @@ enum SDKEndpoint {
     static let consent = "\(basePath)/consent"
     static let identify = "\(basePath)/identify"
     static let responses = "\(basePath)/responses"
+
+    // Push
+    static let pushRegisterToken = "\(basePath)/push/register-token"
+    static let pushUpdateToken = "\(basePath)/push/update-token"
+    static let pushInvalidateToken = "\(basePath)/push/invalidate-token"
 }
