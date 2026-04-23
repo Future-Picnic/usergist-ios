@@ -1,0 +1,1493 @@
+{
+  "builtTestProducts" : [
+    {
+      "binaryPath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.xctest/Contents/MacOS/RitmusFeedbackPackageTests",
+      "packagePath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios",
+      "productName" : "RitmusFeedbackPackageTests"
+    }
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.RitmusFeedback-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/sources",
+      "importPath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Config.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/ConsentStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/EventQueue.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Identity.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Lifecycle/AppLifecycle.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Logger.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/AnyCodable.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/ArmedTrigger.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/IngestContext.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/IngestEvent.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/Prompt.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/Question.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/Segment.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Networking/APIClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Networking/Endpoints.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Networking/RetryPolicy.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Runtime.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Storage.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Transport.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/FrequencyCap.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/RulesCache.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/SegmentEvaluator.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/TriggerMatcher.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/UserStateTracker.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/BottomSheetController.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Haptics.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/PromptPresenter.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/PromptView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/MultipleChoiceQuestionView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/NpsQuestionView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/RatingQuestionView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/ShortTextQuestionView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/ThemeResolver.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/DateFormat.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/Hashing.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/Jitter.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/Queue.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/Consent.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/Environment.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/PromptResponseInfo.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/PromptTheme.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Ritmus.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "RitmusFeedback",
+      "moduleOutputPath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/Modules/RitmusFeedback.swiftmodule",
+      "objects" : [
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Config.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/ConsentStore.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/EventQueue.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Identity.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/AppLifecycle.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Logger.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/AnyCodable.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/ArmedTrigger.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/IngestContext.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/IngestEvent.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Prompt.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Question.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Segment.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/APIClient.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Endpoints.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/RetryPolicy.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Runtime.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Storage.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Transport.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/FrequencyCap.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/RulesCache.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/SegmentEvaluator.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/TriggerMatcher.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/UserStateTracker.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/BottomSheetController.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Haptics.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/PromptPresenter.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/PromptView.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/MultipleChoiceQuestionView.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/NpsQuestionView.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/RatingQuestionView.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/ShortTextQuestionView.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/ThemeResolver.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/DateFormat.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Hashing.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Jitter.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Queue.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Consent.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Environment.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/PromptResponseInfo.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/PromptTheme.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Ritmus.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx10.13",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/include/RitmusFeedback-Swift.h",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "sdk_ios"
+      ],
+      "outputFileMapPath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Config.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/ConsentStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/EventQueue.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Identity.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/AppLifecycle.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Logger.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/AnyCodable.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/ArmedTrigger.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/IngestContext.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/IngestEvent.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Prompt.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Question.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Segment.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/APIClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Endpoints.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/RetryPolicy.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Runtime.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Storage.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Transport.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/FrequencyCap.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/RulesCache.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/SegmentEvaluator.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/TriggerMatcher.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/UserStateTracker.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/BottomSheetController.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Haptics.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/PromptPresenter.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/PromptView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/MultipleChoiceQuestionView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/NpsQuestionView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/RatingQuestionView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/ShortTextQuestionView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/ThemeResolver.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/DateFormat.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Hashing.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Jitter.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Queue.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Consent.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Environment.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/PromptResponseInfo.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/PromptTheme.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Ritmus.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/Modules/RitmusFeedback.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Config.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/ConsentStore.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/EventQueue.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Identity.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Lifecycle/AppLifecycle.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Logger.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/AnyCodable.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/ArmedTrigger.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/IngestContext.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/IngestEvent.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/Prompt.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/Question.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/Segment.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Networking/APIClient.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Networking/Endpoints.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Networking/RetryPolicy.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Runtime.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Storage.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Transport.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/FrequencyCap.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/RulesCache.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/SegmentEvaluator.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/TriggerMatcher.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/UserStateTracker.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/BottomSheetController.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Haptics.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/PromptPresenter.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/PromptView.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/MultipleChoiceQuestionView.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/NpsQuestionView.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/RatingQuestionView.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/ShortTextQuestionView.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/ThemeResolver.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/DateFormat.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/Hashing.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/Jitter.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/Queue.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/Consent.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/Environment.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/PromptResponseInfo.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/PromptTheme.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Ritmus.swift"
+      ],
+      "tempsPath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.RitmusFeedbackPackageTests-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.build/sources",
+      "importPath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.derived/runner.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/Modules/RitmusFeedbackTests.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "RitmusFeedbackPackageTests",
+      "moduleOutputPath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/Modules/RitmusFeedbackPackageTests.swiftmodule",
+      "objects" : [
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.build/runner.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx10.13",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.build/include/RitmusFeedbackPackageTests-Swift.h",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "sdk_ios"
+      ],
+      "outputFileMapPath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/Modules/RitmusFeedbackPackageTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.derived/runner.swift"
+      ],
+      "tempsPath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.RitmusFeedbackTests-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/sources",
+      "importPath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/EventQueueTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/FrequencyCapTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/PromptDecodingTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/SegmentEvaluatorTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/TransportRetryTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/Modules/RitmusFeedback.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "RitmusFeedbackTests",
+      "moduleOutputPath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/Modules/RitmusFeedbackTests.swiftmodule",
+      "objects" : [
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/EventQueueTests.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/FrequencyCapTests.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/PromptDecodingTests.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/SegmentEvaluatorTests.swift.o",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/TransportRetryTests.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "sdk_ios"
+      ],
+      "outputFileMapPath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/EventQueueTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/FrequencyCapTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/PromptDecodingTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/SegmentEvaluatorTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/TransportRetryTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/Modules/RitmusFeedbackTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/EventQueueTests.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/FrequencyCapTests.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/PromptDecodingTests.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/SegmentEvaluatorTests.swift",
+        "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/TransportRetryTests.swift"
+      ],
+      "tempsPath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "RitmusFeedback" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "RitmusFeedback",
+      "-package-name",
+      "sdk_ios",
+      "-c",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Config.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/ConsentStore.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/EventQueue.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Identity.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Lifecycle/AppLifecycle.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Logger.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/AnyCodable.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/ArmedTrigger.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/IngestContext.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/IngestEvent.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/Prompt.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/Question.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/Segment.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Networking/APIClient.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Networking/Endpoints.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Networking/RetryPolicy.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Runtime.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Storage.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Transport.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/FrequencyCap.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/RulesCache.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/SegmentEvaluator.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/TriggerMatcher.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/UserStateTracker.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/BottomSheetController.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Haptics.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/PromptPresenter.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/PromptView.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/MultipleChoiceQuestionView.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/NpsQuestionView.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/RatingQuestionView.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/ShortTextQuestionView.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/ThemeResolver.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/DateFormat.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/Hashing.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/Jitter.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/Queue.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/Consent.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/Environment.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/PromptResponseInfo.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/PromptTheme.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Ritmus.swift",
+      "-I",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx10.13",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/include/RitmusFeedback-Swift.h",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "sdk_ios",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "RitmusFeedbackPackageTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "RitmusFeedbackPackageTests",
+      "-package-name",
+      "sdk_ios",
+      "-c",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.derived/runner.swift",
+      "-I",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx10.13",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.build/include/RitmusFeedbackPackageTests-Swift.h",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "sdk_ios",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "RitmusFeedbackTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "RitmusFeedbackTests",
+      "-package-name",
+      "sdk_ios",
+      "-c",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/EventQueueTests.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/FrequencyCapTests.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/PromptDecodingTests.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/SegmentEvaluatorTests.swift",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/TransportRetryTests.swift",
+      "-I",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "sdk_ios",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "RitmusFeedback" : [
+
+    ],
+    "RitmusFeedbackPackageTests" : [
+      "RitmusFeedbackTests",
+      "RitmusFeedback"
+    ],
+    "RitmusFeedbackTests" : [
+      "RitmusFeedback"
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+    "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.derived/runner.swift" : {
+      "inputs" : [
+
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.derived/runner.swift"
+        }
+      ]
+    }
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Config.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/ConsentStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/EventQueue.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Identity.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Lifecycle/AppLifecycle.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Logger.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/AnyCodable.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/ArmedTrigger.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/IngestContext.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/IngestEvent.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/Prompt.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/Question.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Models/Segment.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Networking/APIClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Networking/Endpoints.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Networking/RetryPolicy.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Runtime.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Storage.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Transport.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/FrequencyCap.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/RulesCache.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/SegmentEvaluator.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/TriggerMatcher.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Triggers/UserStateTracker.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/BottomSheetController.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Haptics.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/PromptPresenter.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/PromptView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/MultipleChoiceQuestionView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/NpsQuestionView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/RatingQuestionView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/Questions/ShortTextQuestionView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/UI/ThemeResolver.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/DateFormat.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/Hashing.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/Jitter.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Internal/Util/Queue.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/Consent.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/Environment.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/PromptResponseInfo.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Public/PromptTheme.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Sources/RitmusFeedback/Ritmus.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/sources"
+    },
+    "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.derived/runner.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.build/sources"
+    },
+    "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/APIClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/AnyCodable.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/AppLifecycle.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/ArmedTrigger.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/BottomSheetController.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Config.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Consent.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/ConsentStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/DateFormat.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Endpoints.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Environment.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/EventQueue.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/FrequencyCap.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Haptics.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Hashing.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Identity.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/IngestContext.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/IngestEvent.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Jitter.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Logger.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/MultipleChoiceQuestionView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/NpsQuestionView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Prompt.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/PromptPresenter.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/PromptResponseInfo.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/PromptTheme.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/PromptView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Question.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Queue.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/RatingQuestionView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/RetryPolicy.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Ritmus.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/RulesCache.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Runtime.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Segment.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/SegmentEvaluator.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/ShortTextQuestionView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Storage.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/ThemeResolver.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/Transport.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/TriggerMatcher.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedback.build/UserStateTracker.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/EventQueueTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/FrequencyCapTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/PromptDecodingTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/SegmentEvaluatorTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/TransportRetryTests.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackPackageTests.product/Objects.LinkFileList"
+    },
+    "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/EventQueueTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/FrequencyCapTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/PromptDecodingTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/SegmentEvaluatorTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/Tests/RitmusFeedbackTests/TransportRetryTests.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/RitmusFeedbackTests.build/sources"
+    },
+    "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/lirangabai/Documents/Ritmus/New_products/feedback_tool/packages/sdk-ios/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}
