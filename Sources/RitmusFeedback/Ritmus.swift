@@ -33,6 +33,16 @@ public final class Ritmus {
     private let lock = NSLock()
     private var runtime: Runtime?
 
+    /// Push-notifications surface. Available after `initialize`; no-ops before.
+    public private(set) lazy var push: RitmusPush = RitmusPush(
+        registerToken: { [weak self] token in
+            self?.withRuntime { rt in rt.pushRegistrar.register(token: token) }
+        },
+        track: { [weak self] name, props in
+            self?.track(name, properties: props)
+        }
+    )
+
     private init() {}
 
     // MARK: - Public API

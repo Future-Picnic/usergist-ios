@@ -21,6 +21,7 @@ final class Runtime {
     private let triggerMatcher: TriggerMatcher
     private let presenter: PromptPresenter
     private let lifecycle: AppLifecycleObserver
+    let pushRegistrar: PushRegistrar
 
     /// Serial queue for all mutating operations.
     private let workQueue: DispatchQueue
@@ -85,6 +86,13 @@ final class Runtime {
         )
         self.presenter = PromptPresenter()
         self.lifecycle = AppLifecycleObserver(queue: workQueue)
+        self.pushRegistrar = PushRegistrar(
+            apiClient: apiClient,
+            identity: identityStore,
+            consent: consentStore,
+            logger: logger,
+            queue: RitmusQueue.serial("push")
+        )
 
         // Seed user-state tracker from cached rules so first trigger fires
         // with correct windowed counters.
