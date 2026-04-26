@@ -204,6 +204,41 @@ final class Runtime {
         logger.setDebug(enabled)
     }
 
+    // MARK: - Surveys (v1: API transport + handlers; native multi-step renderer TBD)
+
+    func getAvailableSurveys(completion: @escaping ([SurveySummary]) -> Void) {
+        guard consentStore.allowsSurvey else {
+            completion([])
+            return
+        }
+        let identity = identityStore.current()
+        apiClient.getAvailableSurveys(
+            anonymousId: identity.anonymousId,
+            externalId: identity.externalId,
+            completion: { result in
+                switch result {
+                case .success(let list): completion(list)
+                case .failure: completion([])
+                }
+            }
+        )
+    }
+
+    func openSurvey(surveyId: String, language: String?, source: String) {
+        guard consentStore.allowsSurvey else {
+            logger.debug("openSurvey: survey consent not granted")
+            return
+        }
+        // v1: Notify host app that a survey is ready to render. The full
+        // native renderer ships in a follow-up; host apps can interpret
+        // this by fetching the survey via their own UI and reporting back.
+        logger.debug("survey.open requested: \(surveyId) language=\(language ?? "default") source=\(source)")
+    }
+
+    func resolveSurveyLink(token: String) {
+        logger.debug("survey.resolveLink requested: token=\(token.prefix(8))…")
+    }
+
     // MARK: - Trigger sync
 
     private func scheduleTriggerSync() {

@@ -34,6 +34,10 @@ final class ConsentStore {
         queue.sync { snapshot.allowsPush }
     }
 
+    var allowsSurvey: Bool {
+        queue.sync { snapshot.allowsSurvey }
+    }
+
     /// Returns `true` if the new value differs from what was on disk.
     @discardableResult
     func update(_ consent: Consent) -> Bool {

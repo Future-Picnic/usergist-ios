@@ -160,6 +160,47 @@ public final class Ritmus {
         return rt?.anonymousId ?? ""
     }
 
+    // MARK: - Surveys
+
+    /// Handlers invoked during the survey lifecycle (show / complete / abandon).
+    /// Set these before calling `openSurvey` if you want to react to lifecycle events.
+    public var surveyHandlers: SurveyHandlers = SurveyHandlers()
+
+    /// Returns the list of surveys currently offerable to this user.
+    /// Requires `Consent.survey = true`. Returns an empty list otherwise.
+    public func getAvailableSurveys(completion: @escaping ([SurveySummary]) -> Void) {
+        withRuntime { rt in
+            rt.getAvailableSurveys { summaries in
+                DispatchQueue.main.async {
+                    completion(summaries)
+                }
+            }
+        }
+    }
+
+    /// Launches a specific survey by ID. Host app is responsible for rendering
+    /// the multi-step flow; the SDK provides the fetched flow via the handler.
+    public func openSurvey(_ surveyId: String, language: String? = nil) {
+        withRuntime { rt in
+            rt.openSurvey(surveyId: surveyId, language: language, source: "on_demand")
+        }
+    }
+
+    /// Handles a Ritmus survey share link. Returns true if the URL was recognized.
+    @discardableResult
+    public func handleSurveyDeepLink(_ url: URL) -> Bool {
+        let path = url.path
+        let tokenFromPath = path.hasPrefix("/s/") ? String(path.dropFirst(3)) : nil
+        let tokenFromQuery = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "survey" })?.value
+        let token = tokenFromPath ?? tokenFromQuery
+        guard let token, !token.isEmpty else { return false }
+        withRuntime { rt in
+            rt.resolveSurveyLink(token: token)
+        }
+        return true
+    }
+
     // MARK: - Internals
 
     private func withRuntime(_ body: @escaping (Runtime) -> Void) {

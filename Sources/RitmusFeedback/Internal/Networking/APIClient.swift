@@ -122,6 +122,33 @@ final class APIClient {
         performWithRetry(request: request, attempt: 0, completion: completion)
     }
 
+    // MARK: - Surveys (v1 surface)
+
+    private struct AvailableSurveysEnvelope: Decodable {
+        let surveys: [SurveySummary]
+    }
+
+    func getAvailableSurveys(
+        anonymousId: String,
+        externalId: String?,
+        completion: @escaping (Result<[SurveySummary], APIError>) -> Void
+    ) {
+        var query: [URLQueryItem] = [URLQueryItem(name: "anonymousId", value: anonymousId)]
+        if let externalId, !externalId.isEmpty {
+            query.append(URLQueryItem(name: "externalId", value: externalId))
+        }
+        get(
+            path: "/v1/sdk/surveys/available",
+            query: query,
+            responseType: AvailableSurveysEnvelope.self
+        ) { result in
+            switch result {
+            case .success(let env): completion(.success(env.surveys))
+            case .failure(let err): completion(.failure(err))
+            }
+        }
+    }
+
     // MARK: - Retry loop
 
     private func performWithRetry<Response: Decodable>(
