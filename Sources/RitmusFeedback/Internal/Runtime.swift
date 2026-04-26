@@ -229,14 +229,36 @@ final class Runtime {
             logger.debug("openSurvey: survey consent not granted")
             return
         }
-        // v1: Notify host app that a survey is ready to render. The full
-        // native renderer ships in a follow-up; host apps can interpret
-        // this by fetching the survey via their own UI and reporting back.
         logger.debug("survey.open requested: \(surveyId) language=\(language ?? "default") source=\(source)")
+        // Hand off to the host app's onShow handler. Host renders the flow.
+        // The native multi-step renderer (parity with React Native) lands
+        // separately in packages/sdk-ios/Sources/RitmusFeedback/Surveys/.
+        DispatchQueue.main.async {
+            Ritmus.shared.surveyHandlers.onShow?(surveyId)
+        }
     }
 
     func resolveSurveyLink(token: String) {
-        logger.debug("survey.resolveLink requested: token=\(token.prefix(8))…")
+        guard consentStore.allowsSurvey else {
+            logger.debug("resolveSurveyLink: survey consent not granted")
+            return
+        }
+        let identity = identityStore.current()
+        apiClient.resolveSurveyLink(
+            token: token,
+            anonymousId: identity.anonymousId,
+            externalId: identity.externalId
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let surveyId):
+                self.work {
+                    self.openSurvey(surveyId: surveyId, language: nil, source: "deep_link")
+                }
+            case .failure(let err):
+                self.logger.warn("resolveSurveyLink failed: \(err)")
+            }
+        }
     }
 
     // MARK: - Trigger sync

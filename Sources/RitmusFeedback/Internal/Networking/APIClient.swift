@@ -149,6 +149,42 @@ final class APIClient {
         }
     }
 
+    private struct ResolveSurveyLinkRequest: Encodable {
+        let token: String
+        let anonymousId: String
+        let externalId: String?
+    }
+
+    private struct ResolveSurveyLinkResponse: Decodable {
+        let surveyId: String
+        let name: String?
+    }
+
+    /// Resolve a share-link token to a concrete survey id. Server returns 404
+    /// for expired or unknown tokens, surfaced as APIError.
+    func resolveSurveyLink(
+        token: String,
+        anonymousId: String,
+        externalId: String?,
+        completion: @escaping (Result<String, APIError>) -> Void
+    ) {
+        let body = ResolveSurveyLinkRequest(
+            token: token,
+            anonymousId: anonymousId,
+            externalId: externalId
+        )
+        postJSON(
+            path: "/v1/sdk/surveys/resolve",
+            body: body,
+            responseType: ResolveSurveyLinkResponse.self
+        ) { result in
+            switch result {
+            case .success(let res): completion(.success(res.surveyId))
+            case .failure(let err): completion(.failure(err))
+            }
+        }
+    }
+
     // MARK: - Retry loop
 
     private func performWithRetry<Response: Decodable>(
