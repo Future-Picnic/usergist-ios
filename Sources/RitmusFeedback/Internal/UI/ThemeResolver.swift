@@ -48,7 +48,7 @@ enum ThemeResolver {
         let subtext = oc?.subtext ?? sc?.subtext
         let border = oc?.border ?? sc?.border
         let radius = override?.radius ?? server?.radius
-        let fontFamily = override?.fontFamily ?? server?.fontFamily
+        let fontFamily = override?.fontFamily ?? server?.fontFamily ?? "Plus Jakarta Sans"
 
         let bodyFont = buildFont(family: fontFamily, size: 15, weight: .regular, fallback: fallback.font)
         let titleFont = buildFont(family: fontFamily, size: 18, weight: .semibold, fallback: fallback.titleFont)
