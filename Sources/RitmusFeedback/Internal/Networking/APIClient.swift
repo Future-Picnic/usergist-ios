@@ -259,19 +259,55 @@ final class APIClient {
         data: Data?,
         completion: @escaping (Result<Response, APIError>) -> Void
     ) {
+        let bytes = data ?? Data("{}".utf8)
+        let envelope: APIEnvelope<Response>
+        do {
+            envelope = try JSONDecoder.ritmus().decode(APIEnvelope<Response>.self, from: bytes)
+        } catch {
+            logger.error("decode failed", error: error)
+            callbackQueue.async { completion(.failure(.decoding(error))) }
+            return
+        }
+
+        if envelope.success == false {
+            let code = envelope.error?.code ?? "unknown"
+            let message = envelope.error?.message ?? "API returned success=false"
+            logger.error("API error \(code): \(message)")
+            callbackQueue.async {
+                completion(.failure(.server(status: 0, body: bytes)))
+            }
+            return
+        }
+
+        // Endpoints with an empty body still satisfy `EmptyResponse`.
         if Response.self == EmptyResponse.self, let empty = EmptyResponse() as? Response {
             callbackQueue.async { completion(.success(empty)) }
             return
         }
-        do {
-            let bytes = data ?? Data("{}".utf8)
-            let decoded = try JSONDecoder.ritmus().decode(Response.self, from: bytes)
-            callbackQueue.async { completion(.success(decoded)) }
-        } catch {
-            logger.error("decode failed", error: error)
-            callbackQueue.async { completion(.failure(.decoding(error))) }
+
+        guard let payload = envelope.data else {
+            // success=true with no `data` is a contract violation. Surface it.
+            callbackQueue.async {
+                completion(.failure(.server(status: 0, body: bytes)))
+            }
+            return
         }
+
+        callbackQueue.async { completion(.success(payload)) }
     }
+}
+
+/// Standard API envelope returned by every Ritmus API route.
+/// `data` is absent when `success=false`; `error` is absent when `success=true`.
+private struct APIEnvelope<T: Decodable>: Decodable {
+    let success: Bool
+    let data: T?
+    let error: APIErrorEnvelope?
+}
+
+private struct APIErrorEnvelope: Decodable {
+    let code: String
+    let message: String
 }
 
 /// Marker type for endpoints that return no body of interest.
