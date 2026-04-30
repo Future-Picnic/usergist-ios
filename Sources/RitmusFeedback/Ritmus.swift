@@ -40,6 +40,14 @@ public final class Ritmus {
         },
         track: { [weak self] name, props in
             self?.track(name, properties: props)
+        },
+        appOpen: { [weak self] in
+            self?.withRuntime { rt in rt.pushRegistrar.reportAppOpen() }
+        },
+        beacon: { [weak self] kind, deliveryId, action in
+            self?.withRuntime { rt in
+                rt.pushRegistrar.beacon(kind: kind, deliveryId: deliveryId, actionButton: action)
+            }
         }
     )
 

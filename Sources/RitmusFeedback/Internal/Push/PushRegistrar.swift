@@ -72,6 +72,58 @@ final class PushRegistrar {
         }
     }
 
+    /// Re-bind the most-recently-registered token to a newly identified user.
+    func rebind(externalId: String) {
+        queue.async { [weak self] in
+            guard let self, let token = self.lastRegistered else { return }
+            let snap = self.identity.current()
+            let payload = RebindPayload(
+                anonymousId: snap.anonymousId,
+                externalId: externalId,
+                token: token
+            )
+            self.apiClient.postVoid(path: SDKEndpoint.pushRebind, body: payload) { _ in }
+        }
+    }
+
+    /// Forward an applicationDidBecomeActive signal to the server. Used by
+    /// the adaptive reachability policy to skip silent pings for known-
+    /// active users.
+    func reportAppOpen() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            let snap = self.identity.current()
+            let payload = AppOpenPayload(
+                anonymousId: snap.anonymousId,
+                occurredAt: ISO8601DateFormatter().string(from: Date())
+            )
+            self.apiClient.postVoid(path: SDKEndpoint.pushAppOpen, body: payload) { _ in }
+        }
+    }
+
+    /// SDK-side delivered/displayed/dismissed beacon. Distinct from the
+    /// NSE-side beacon: this fires when the SDK first sees the payload in
+    /// foreground/main code paths (the NSE has already fired earlier in
+    /// the OS receive cycle).
+    func beacon(kind: PushBeaconKind, deliveryId: String, actionButton: String? = nil) {
+        guard !deliveryId.isEmpty else { return }
+        queue.async { [weak self] in
+            guard let self else { return }
+            let payload = BeaconPayload(
+                deliveryId: deliveryId,
+                occurredAt: ISO8601DateFormatter().string(from: Date()),
+                actionButton: actionButton
+            )
+            let path: String
+            switch kind {
+            case .delivered: path = SDKEndpoint.pushDelivered
+            case .displayed: path = SDKEndpoint.pushDisplayed
+            case .dismissed: path = SDKEndpoint.pushDismissed
+            }
+            self.apiClient.postVoid(path: path, body: payload) { _ in }
+        }
+    }
+
     private static func environmentFlag() -> String {
         #if DEBUG
         return "sandbox"
@@ -97,4 +149,27 @@ private struct RegisterTokenPayload: Encodable {
 private struct InvalidateTokenPayload: Encodable {
     let anonymousId: String
     let token: String
+}
+
+private struct RebindPayload: Encodable {
+    let anonymousId: String
+    let externalId: String
+    let token: String
+}
+
+private struct AppOpenPayload: Encodable {
+    let anonymousId: String
+    let occurredAt: String
+}
+
+private struct BeaconPayload: Encodable {
+    let deliveryId: String
+    let occurredAt: String
+    let actionButton: String?
+}
+
+enum PushBeaconKind {
+    case delivered
+    case displayed
+    case dismissed
 }

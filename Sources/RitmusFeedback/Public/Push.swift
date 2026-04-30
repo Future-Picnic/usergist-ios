@@ -102,16 +102,22 @@ public struct PushHandlers: Sendable {
 public final class RitmusPush {
     private let registerTokenFn: (String) -> Void
     private let trackFn: (String, [String: Any]?) -> Void
+    private let appOpenFn: () -> Void
+    private let beaconFn: (PushBeaconKind, String, String?) -> Void
     private let lock = NSLock()
     private var handlers: PushHandlers = PushHandlers()
     private var cachedToken: String?
 
     init(
         registerToken: @escaping (String) -> Void,
-        track: @escaping (String, [String: Any]?) -> Void
+        track: @escaping (String, [String: Any]?) -> Void,
+        appOpen: @escaping () -> Void = {},
+        beacon: @escaping (PushBeaconKind, String, String?) -> Void = { _, _, _ in }
     ) {
         self.registerTokenFn = registerToken
         self.trackFn = track
+        self.appOpenFn = appOpen
+        self.beaconFn = beacon
     }
 
     // MARK: - Public API
@@ -133,6 +139,32 @@ public final class RitmusPush {
                     #endif
                 }
                 completion?(status)
+            }
+        }
+        #else
+        completion?(.denied)
+        #endif
+    }
+
+    /// Provisional authorization (iOS 12+). Opts the user in to *quiet*
+    /// notifications (Notification Center only, no banner) without an
+    /// up-front prompt. Lets us deliver low-stakes pushes and earn the
+    /// upgrade to full alerts when the user explicitly promotes us.
+    @available(iOS 12.0, *)
+    public func requestProvisionalAuthorization(
+        completion: ((PushPermissionStatus) -> Void)? = nil
+    ) {
+        #if canImport(UserNotifications)
+        var options: UNAuthorizationOptions = [.alert, .sound, .badge]
+        options.insert(.provisional)
+        UNUserNotificationCenter.current().requestAuthorization(options: options) { granted, _ in
+            DispatchQueue.main.async {
+                if granted {
+                    #if canImport(UIKit)
+                    UIApplication.shared.registerForRemoteNotifications()
+                    #endif
+                }
+                completion?(granted ? .provisional : .denied)
             }
         }
         #else
@@ -167,6 +199,31 @@ public final class RitmusPush {
         lock.lock()
         self.handlers = handlers
         lock.unlock()
+    }
+
+    /// Forward applicationDidBecomeActive (or your scene equivalent) so
+    /// the server's adaptive reachability worker knows this device is
+    /// alive. Skips silent-ping cycles for the next 24h on this device.
+    public func appDidBecomeActive() {
+        appOpenFn()
+    }
+
+    /// Beacon: SDK observed delivery in main process (foreground or
+    /// background). The Notification Service Extension fires its own
+    /// beacon earlier; calling both is safe — beacons are idempotent.
+    public func beaconDelivered(deliveryId: String) {
+        beaconFn(.delivered, deliveryId, nil)
+    }
+
+    /// Beacon: SDK rendered the notification UI.
+    public func beaconDisplayed(deliveryId: String) {
+        beaconFn(.displayed, deliveryId, nil)
+    }
+
+    /// Beacon: user dismissed the notification without opening (iOS
+    /// `UNNotificationDismissActionIdentifier`).
+    public func beaconDismissed(deliveryId: String) {
+        beaconFn(.dismissed, deliveryId, nil)
     }
 
     /// Called by the host app after

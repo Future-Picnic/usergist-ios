@@ -14,4 +14,12 @@ enum SDKEndpoint {
     static let pushRegisterToken = "\(basePath)/push/register-token"
     static let pushUpdateToken = "\(basePath)/push/update-token"
     static let pushInvalidateToken = "\(basePath)/push/invalidate-token"
+    static let pushRebind = "\(basePath)/push/rebind"
+    static let pushAppOpen = "\(basePath)/push/app-open"
+    static let pushDelivered = "\(basePath)/push/delivered"
+    static let pushDisplayed = "\(basePath)/push/displayed"
+    static let pushDismissed = "\(basePath)/push/dismissed"
+    static let pushSilentAck = "\(basePath)/push/silent-ack"
+    static let pushChannels = "\(basePath)/push/channels"
+    static let pushChannelSubscription = "\(basePath)/push/channels/subscription"
 }
