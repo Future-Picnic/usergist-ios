@@ -22,6 +22,9 @@ final class Runtime {
     private let presenter: PromptPresenter
     private let lifecycle: AppLifecycleObserver
     let pushRegistrar: PushRegistrar
+    private let secureStore: SecureStore
+    private let surveyStore: SurveyStore
+    let requestsCache: RequestsCache
 
     /// Serial queue for all mutating operations.
     private let workQueue: DispatchQueue
@@ -37,8 +40,9 @@ final class Runtime {
         self.workQueue = workQueue
         self.logger = RitmusLogger(debug: config.debug)
         self.storage = try Storage(writeKeyHash: config.writeKeyHash)
-        self.identityStore = IdentityStore(storage: storage, logger: logger, queue: RitmusQueue.serial("identity"))
-        self.consentStore = ConsentStore(storage: storage, logger: logger, queue: RitmusQueue.serial("consent"))
+        self.secureStore = SecureStore(writeKeyHash: config.writeKeyHash, logger: logger)
+        self.identityStore = IdentityStore(storage: storage, secure: secureStore, logger: logger, queue: RitmusQueue.serial("identity"))
+        self.consentStore = ConsentStore(storage: storage, secure: secureStore, logger: logger, queue: RitmusQueue.serial("consent"))
         self.eventQueue = EventQueue(
             storage: storage,
             logger: logger,
@@ -50,7 +54,8 @@ final class Runtime {
             writeKey: config.writeKey,
             sdkVersion: config.sdkVersion,
             logger: logger,
-            callbackQueue: workQueue
+            callbackQueue: workQueue,
+            tlsPinSets: config.tlsPinSets
         )
         self.transport = Transport(
             config: config,
@@ -93,6 +98,12 @@ final class Runtime {
             logger: logger,
             queue: RitmusQueue.serial("push")
         )
+        self.surveyStore = SurveyStore(
+            storage: storage,
+            logger: logger,
+            queue: RitmusQueue.serial("survey-store")
+        )
+        self.requestsCache = RequestsCache()
 
         // Seed user-state tracker from cached rules so first trigger fires
         // with correct windowed counters.
@@ -230,11 +241,49 @@ final class Runtime {
             return
         }
         logger.debug("survey.open requested: \(surveyId) language=\(language ?? "default") source=\(source)")
-        // Hand off to the host app's onShow handler. Host renders the flow.
-        // The native multi-step renderer (parity with React Native) lands
-        // separately in packages/sdk-ios/Sources/RitmusFeedback/Surveys/.
+        // Fetch the flow, then present via the native SwiftUI renderer.
+        // Mirrors the RN openSurvey path: fetch → resume-or-start → present.
+        apiClient.getSurveyFlow(surveyId: surveyId, language: language) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let flow):
+                self.presentSurveyFlow(flow: flow, surveyId: surveyId)
+            case .failure(let err):
+                self.logger.warn("survey.open: flow fetch failed (\(err)) — invoking onShow fallback")
+                DispatchQueue.main.async {
+                    Ritmus.shared.surveyHandlers.onShow?(surveyId)
+                }
+            }
+        }
+    }
+
+    private func presentSurveyFlow(flow: SurveyFlow, surveyId: String) {
+        let resume = surveyStore.currentAttempt(for: surveyId)
+        let attemptId: String
+        if let resume = resume {
+            attemptId = resume.attemptId
+        } else {
+            attemptId = UUID().uuidString
+            _ = surveyStore.begin(
+                surveyId: surveyId,
+                attemptId: attemptId,
+                startQuestionId: flow.startQuestionId
+            )
+        }
         DispatchQueue.main.async {
-            Ritmus.shared.surveyHandlers.onShow?(surveyId)
+            if #available(iOS 14.0, *) {
+                SurveyHost.present(
+                    flow: flow,
+                    surveyId: surveyId,
+                    attemptId: attemptId,
+                    store: self.surveyStore,
+                    handlers: Ritmus.shared.surveyHandlers,
+                    resume: resume,
+                    logger: self.logger
+                )
+            } else {
+                Ritmus.shared.surveyHandlers.onShow?(surveyId)
+            }
         }
     }
 

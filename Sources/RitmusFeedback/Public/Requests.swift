@@ -88,6 +88,17 @@ public struct RequestFollow: Codable, Sendable, Equatable {
     public let source: RequestFollowSource
 }
 
+public struct RequestComment: Codable, Sendable, Equatable, Identifiable {
+    public let id: String
+    public let requestId: String
+    public let authorAnonymousId: String?
+    public let authorRole: String?
+    public let body: String
+    public let createdAt: String
+    public let updatedAt: String
+    public let isFromTeam: Bool
+}
+
 public struct GetRequestsOptions: Sendable {
     public var sort: RequestSort?
     public var statuses: [RequestStatus]?
@@ -152,19 +163,28 @@ public enum RequestsError: Error {
 
 public extension Ritmus {
     /// Open the SDK-provided requests board UI.
-    /// TODO[P5.req-ios]: present RequestsBoardViewController.
     func openRequestsBoard() {
-        // Intentionally a no-op until the iOS UI lands.
+        withRuntimeForRequests { rt in
+            DispatchQueue.main.async {
+                if #available(iOS 14.0, *) {
+                    RequestsBoardHost.present(runtime: rt, logger: rt.logger)
+                }
+            }
+        }
     }
 
     /// Open the detail view for a specific request.
-    /// TODO[P5.req-ios]: present RequestDetailViewController.
     func openRequestDetail(_ requestId: String) {
-        _ = requestId
+        withRuntimeForRequests { rt in
+            DispatchQueue.main.async {
+                if #available(iOS 14.0, *) {
+                    RequestsBoardHost.presentDetail(runtime: rt, requestId: requestId)
+                }
+            }
+        }
     }
 
     /// Submit a new request programmatically.
-    /// TODO[P5.req-ios]: call POST /v1/sdk/requests via the runtime.
     func submitRequest(
         title: String,
         description: String,
@@ -178,7 +198,9 @@ public extension Ritmus {
             completion(.failure(RequestsError.validation("description required, max 1500 chars")))
             return
         }
-        completion(.failure(RequestsError.notImplemented("iOS submitRequest awaiting P5.req-ios")))
+        withRuntimeForRequests { rt in
+            rt.submitRequest(title: title, description: description, completion: completion)
+        }
     }
 
     /// Fetch a page of requests.
@@ -186,33 +208,70 @@ public extension Ritmus {
         options: GetRequestsOptions = GetRequestsOptions(),
         completion: @escaping (Result<GetRequestsResult, Error>) -> Void
     ) {
-        _ = options
-        completion(.success(GetRequestsResult(items: [], nextCursor: nil)))
+        withRuntimeForRequests { rt in
+            rt.listRequests(options: options, completion: completion)
+        }
     }
 
-    /// Toggle upvote.
+    /// Fetch a single request by id.
+    func getRequest(
+        _ requestId: String,
+        completion: @escaping (Result<FeatureRequest, Error>) -> Void
+    ) {
+        withRuntimeForRequests { rt in
+            rt.getRequest(requestId: requestId, completion: completion)
+        }
+    }
+
+    /// Toggle upvote. Optimistic; rolls back on server error.
     func voteOnRequest(
         _ requestId: String,
         vote: Bool,
         completion: ((Result<RequestVote, Error>) -> Void)? = nil
     ) {
-        completion?(.failure(RequestsError.notImplemented("iOS voteOnRequest awaiting P5.req-ios")))
-        _ = (requestId, vote)
+        withRuntimeForRequests { rt in
+            rt.voteOnRequest(requestId: requestId, vote: vote) { result in
+                completion?(result)
+            }
+        }
     }
 
-    /// Toggle follow.
+    /// Toggle follow. Optimistic; rolls back on server error.
     func followRequest(
         _ requestId: String,
         follow: Bool,
         completion: ((Result<RequestFollow, Error>) -> Void)? = nil
     ) {
-        completion?(.failure(RequestsError.notImplemented("iOS followRequest awaiting P5.req-ios")))
-        _ = (requestId, follow)
+        withRuntimeForRequests { rt in
+            rt.followRequest(requestId: requestId, follow: follow) { result in
+                completion?(result)
+            }
+        }
+    }
+
+    /// Fetch comments for a request.
+    func getComments(
+        requestId: String,
+        completion: @escaping (Result<[RequestComment], Error>) -> Void
+    ) {
+        withRuntimeForRequests { rt in
+            rt.getComments(requestId: requestId, completion: completion)
+        }
+    }
+
+    /// Post a comment on a request.
+    func postComment(
+        requestId: String,
+        body: String,
+        completion: @escaping (Result<RequestComment, Error>) -> Void
+    ) {
+        withRuntimeForRequests { rt in
+            rt.postComment(requestId: requestId, body: body, completion: completion)
+        }
     }
 
     /// Register host-app callbacks.
     func setRequestsHandlers(_ handlers: RequestsHandlers) {
-        _ = handlers
-        // TODO[P5.req-ios]: wire handlers through the runtime.
+        self.requestsHandlers = handlers
     }
 }

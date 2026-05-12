@@ -22,4 +22,16 @@ enum SDKEndpoint {
     static let pushSilentAck = "\(basePath)/push/silent-ack"
     static let pushChannels = "\(basePath)/push/channels"
     static let pushChannelSubscription = "\(basePath)/push/channels/subscription"
+
+    // Surveys
+    static func surveyFlow(_ id: String) -> String { "\(basePath)/surveys/\(id)/flow" }
+    static let availableSurveys = "\(basePath)/surveys/available"
+    static let resolveSurveyLink = "\(basePath)/surveys/resolve"
+
+    // Feature requests
+    static let requests = "\(basePath)/requests"
+    static func request(_ id: String) -> String { "\(basePath)/requests/\(id)" }
+    static func requestVote(_ id: String) -> String { "\(basePath)/requests/\(id)/vote" }
+    static func requestFollow(_ id: String) -> String { "\(basePath)/requests/\(id)/follow" }
+    static func requestComments(_ id: String) -> String { "\(basePath)/requests/\(id)/comments" }
 }

@@ -174,6 +174,16 @@ public final class Ritmus {
     /// Set these before calling `openSurvey` if you want to react to lifecycle events.
     public var surveyHandlers: SurveyHandlers = SurveyHandlers()
 
+    /// Handlers invoked when feature-request mutations succeed (submit / vote /
+    /// follow / status change). Optional — host apps that don't need these
+    /// callbacks can leave them nil.
+    public var requestsHandlers: RequestsHandlers = RequestsHandlers()
+
+    /// Internal helper used by the public Requests extension methods.
+    internal func withRuntimeForRequests(_ body: @escaping (Runtime) -> Void) {
+        withRuntime(body)
+    }
+
     /// Returns the list of surveys currently offerable to this user.
     /// Requires `Consent.survey = true`. Returns an empty list otherwise.
     public func getAvailableSurveys(completion: @escaping ([SurveySummary]) -> Void) {

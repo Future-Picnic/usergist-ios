@@ -67,6 +67,56 @@ final class EventQueueTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: storage.eventsLog.path))
     }
 
+    func test_persistedEnvelopeIsVersioned() throws {
+        // Confirms that the on-disk format is the versioned JSON envelope
+        // mirrored from packages/sdk-react-native/src/internal/queue.ts.
+        let queue = makeQueue(maxCount: 10)
+        queue.enqueue(makeEvent(name: "alpha"))
+        let raw = try Data(contentsOf: storage.eventsLog)
+        let json = try JSONSerialization.jsonObject(with: raw) as? [String: Any]
+        XCTAssertNotNil(json)
+        XCTAssertEqual(json?["version"] as? Int, 1)
+        let events = json?["events"] as? [[String: Any]]
+        XCTAssertEqual(events?.count, 1)
+        XCTAssertEqual(events?.first?["name"] as? String, "alpha")
+    }
+
+    func test_hydratesLegacyNDJSON() throws {
+        // Simulates an install upgrading from a pre-versioning build that
+        // wrote bare newline-delimited event JSON. Mirrors the legacy fallback
+        // in packages/sdk-react-native/src/internal/queue.ts (the
+        // `Array.isArray(stored)` branch).
+        let encoder = JSONEncoder.ritmus()
+        let line1 = try encoder.encode(makeEvent(name: "legacy-a"))
+        let line2 = try encoder.encode(makeEvent(name: "legacy-b"))
+        var buffer = Data()
+        buffer.append(line1)
+        buffer.append(0x0A)
+        buffer.append(line2)
+        buffer.append(0x0A)
+        try storage.writeData(buffer, to: storage.eventsLog)
+
+        let queue = makeQueue(maxCount: 10)
+        XCTAssertEqual(queue.snapshot().map { $0.name }, ["legacy-a", "legacy-b"])
+
+        // Next mutation should rewrite as the versioned envelope.
+        queue.enqueue(makeEvent(name: "fresh"))
+        let raw = try Data(contentsOf: storage.eventsLog)
+        let json = try JSONSerialization.jsonObject(with: raw) as? [String: Any]
+        XCTAssertEqual(json?["version"] as? Int, 1)
+    }
+
+    func test_discardsUnknownVersion() throws {
+        // A future SDK might bump QUEUE_SCHEMA_VERSION. Earlier installs must
+        // discard those snapshots rather than crash on a shape mismatch.
+        let payload: [String: Any] = ["version": 999, "events": []]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        try storage.writeData(data, to: storage.eventsLog)
+        let queue = makeQueue(maxCount: 10)
+        XCTAssertEqual(queue.count, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: storage.eventsLog.path))
+    }
+
     // MARK: - Helpers
 
     private func makeQueue(maxCount: Int) -> EventQueue {

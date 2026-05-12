@@ -31,7 +31,8 @@ final class APIClient {
         logger: RitmusLogger,
         retryPolicy: RetryPolicy = .default,
         callbackQueue: DispatchQueue,
-        session: URLSession = .shared
+        session: URLSession? = nil,
+        tlsPinSets: [TLSPinSet] = []
     ) {
         self.baseURL = baseURL
         self.writeKey = writeKey
@@ -39,7 +40,18 @@ final class APIClient {
         self.logger = logger
         self.retryPolicy = retryPolicy
         self.callbackQueue = callbackQueue
-        self.session = session
+        if let session = session {
+            self.session = session
+        } else if tlsPinSets.contains(where: { !$0.sha256Pins.isEmpty }) {
+            let delegate = TLSPinnedSessionDelegate(pinSets: tlsPinSets, logger: logger)
+            self.session = URLSession(
+                configuration: .default,
+                delegate: delegate,
+                delegateQueue: nil
+            )
+        } else {
+            self.session = .shared
+        }
     }
 
     // MARK: - Request building
@@ -158,6 +170,33 @@ final class APIClient {
     private struct ResolveSurveyLinkResponse: Decodable {
         let surveyId: String
         let name: String?
+    }
+
+    private struct SurveyFlowEnvelope: Decodable {
+        let flow: SurveyFlow
+    }
+
+    /// Fetch the full flow definition for `surveyId`. Used by the native
+    /// renderer to drive question-by-question presentation.
+    func getSurveyFlow(
+        surveyId: String,
+        language: String?,
+        completion: @escaping (Result<SurveyFlow, APIError>) -> Void
+    ) {
+        var query: [URLQueryItem] = []
+        if let language, !language.isEmpty {
+            query.append(URLQueryItem(name: "language", value: language))
+        }
+        get(
+            path: SDKEndpoint.surveyFlow(surveyId),
+            query: query,
+            responseType: SurveyFlowEnvelope.self
+        ) { result in
+            switch result {
+            case .success(let env): completion(.success(env.flow))
+            case .failure(let err): completion(.failure(err))
+            }
+        }
     }
 
     /// Resolve a share-link token to a concrete survey id. Server returns 404

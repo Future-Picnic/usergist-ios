@@ -1,8 +1,22 @@
 import Foundation
 
+// PORTED FROM: packages/sdk-react-native/src/internal/queue.ts
+//
+// Persisted shape mirrors the RN reference: `{ "version": N, "events": [...] }`.
+// Bumped every time the on-disk shape changes; older snapshots are discarded
+// rather than risk a deserialise mismatch. Events are best-effort, not durable.
+private let QUEUE_SCHEMA_VERSION: Int = 1
+
+private struct PersistedQueue: Codable {
+    let version: Int
+    let events: [IngestEvent]
+}
+
 /// Bounded, persistent, FIFO event queue.
 ///
-/// - Persists to `events.log` as newline-delimited JSON (`NDJSON`).
+/// - Persists to `events.log` as a versioned JSON envelope.
+/// - On hydrate, falls back to the legacy NDJSON format for installs upgrading
+///   from pre-versioning SDK builds; the next persist re-writes as envelope.
 /// - Drops oldest on overflow of either `maxCount` or `maxBytes`.
 /// - NOT internally locked — callers must serialize access via the SDK's
 ///   internal serial queue (passed at construction time).
@@ -68,6 +82,27 @@ final class EventQueue {
               !data.isEmpty else {
             return
         }
+        // Preferred path: versioned JSON envelope written by current SDK builds.
+        if let wrapped = try? decoder.decode(PersistedQueue.self, from: data) {
+            if wrapped.version == QUEUE_SCHEMA_VERSION {
+                events = wrapped.events
+            } else {
+                logger.error("event queue hydrate: discarding unknown queue version \(wrapped.version)", error: nil)
+                try? storage.deleteFile(at: storage.eventsLog)
+                return
+            }
+        } else {
+            // Legacy NDJSON written by pre-versioning SDK builds. Parse line by
+            // line, then re-persist into the envelope shape on next write.
+            events = parseLegacyNDJSON(data)
+        }
+        if events.count > maxCount {
+            events.removeFirst(events.count - maxCount)
+            persist()
+        }
+    }
+
+    private func parseLegacyNDJSON(_ data: Data) -> [IngestEvent] {
         var loaded: [IngestEvent] = []
         var cursor = data.startIndex
         while cursor < data.endIndex {
@@ -87,11 +122,7 @@ final class EventQueue {
             }
             cursor = newline.upperBound
         }
-        self.events = loaded
-        if events.count > maxCount {
-            events.removeFirst(events.count - maxCount)
-            persist()
-        }
+        return loaded
     }
 
     private func enforceLimits() {
@@ -119,13 +150,9 @@ final class EventQueue {
                 try storage.deleteFile(at: storage.eventsLog)
                 return
             }
-            var buffer = Data()
-            for event in events {
-                let line = try encoder.encode(event)
-                buffer.append(line)
-                buffer.append(0x0A) // newline
-            }
-            try storage.writeData(buffer, to: storage.eventsLog)
+            let wrapped = PersistedQueue(version: QUEUE_SCHEMA_VERSION, events: events)
+            let data = try encoder.encode(wrapped)
+            try storage.writeData(data, to: storage.eventsLog)
         } catch {
             logger.error("event queue persist failed", error: error)
         }

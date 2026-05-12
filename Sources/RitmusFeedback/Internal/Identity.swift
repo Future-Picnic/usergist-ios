@@ -12,24 +12,45 @@ final class IdentityStore {
     }
 
     private let storage: Storage
+    private let secure: SecureStore?
     private let logger: RitmusLogger
     private let queue: DispatchQueue
     private var snapshot: Snapshot
 
-    /// Synchronous init reads (or creates) the identity file.
-    init(storage: Storage, logger: RitmusLogger, queue: DispatchQueue) {
+    /// Synchronous init: prefers Keychain, falls back to the legacy plaintext
+    /// file. After a successful Keychain read we delete the plaintext copy.
+    init(storage: Storage, secure: SecureStore?, logger: RitmusLogger, queue: DispatchQueue) {
         self.storage = storage
+        self.secure = secure
         self.logger = logger
         self.queue = queue
-        if let existing = (try? storage.readJSON(Snapshot.self, at: storage.identityFile)) ?? nil {
+        if let secure, let raw = secure.read(.identity),
+           let existing = try? JSONDecoder.ritmus().decode(Snapshot.self, from: raw) {
             self.snapshot = existing
+        } else if let legacy = (try? storage.readJSON(Snapshot.self, at: storage.identityFile)) ?? nil {
+            // One-time migration from plaintext file → Keychain.
+            self.snapshot = legacy
+            if let secure, let data = try? JSONEncoder.ritmus().encode(legacy),
+               secure.write(.identity, data) {
+                try? storage.deleteFile(at: storage.identityFile)
+            }
         } else {
             self.snapshot = Snapshot(anonymousId: UUID().uuidString, externalId: nil)
-            do {
-                try storage.writeJSON(self.snapshot, to: storage.identityFile)
-            } catch {
-                logger.error("failed to persist initial identity", error: error)
-            }
+            persistInitial()
+        }
+    }
+
+    private func persistInitial() {
+        if let secure, let data = try? JSONEncoder.ritmus().encode(snapshot),
+           secure.write(.identity, data) {
+            return
+        }
+        // Fallback: plaintext file if Keychain unavailable (e.g. missing
+        // entitlement). Best-effort; downstream callers tolerate failure.
+        do {
+            try storage.writeJSON(self.snapshot, to: storage.identityFile)
+        } catch {
+            logger.error("failed to persist initial identity", error: error)
         }
     }
 
@@ -60,6 +81,12 @@ final class IdentityStore {
     }
 
     private func persistLocked() {
+        if let secure, let data = try? JSONEncoder.ritmus().encode(snapshot),
+           secure.write(.identity, data) {
+            return
+        }
+        // Fallback if Keychain unavailable. Logged as warning so the host
+        // can spot missing entitlements without crashing.
         do {
             try storage.writeJSON(snapshot, to: storage.identityFile)
         } catch {
