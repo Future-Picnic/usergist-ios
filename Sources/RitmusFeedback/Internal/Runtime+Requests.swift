@@ -174,4 +174,44 @@ extension Runtime {
             completion(result.mapError { $0 as Error })
         }
     }
+
+    func editComment(
+        requestId: String,
+        commentId: String,
+        body: String,
+        completion: @escaping (Result<RequestComment, Error>) -> Void
+    ) {
+        let id = identityStore.current()
+        apiClient.editComment(
+            requestId: requestId,
+            commentId: commentId,
+            anonymousId: id.anonymousId,
+            body: body
+        ) { result in
+            completion(result.mapError { $0 as Error })
+        }
+    }
+
+    func deleteComment(
+        requestId: String,
+        commentId: String,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let id = identityStore.current()
+        apiClient.deleteComment(
+            requestId: requestId,
+            commentId: commentId,
+            anonymousId: id.anonymousId
+        ) { result in
+            completion(result.mapError { $0 as Error })
+        }
+    }
+
+    func getRequestBranding(
+        completion: @escaping (Result<RequestBranding, Error>) -> Void
+    ) {
+        apiClient.getRequestBranding { result in
+            completion(result.mapError { $0 as Error })
+        }
+    }
 }

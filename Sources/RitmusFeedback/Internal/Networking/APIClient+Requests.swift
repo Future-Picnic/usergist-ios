@@ -152,5 +152,48 @@ extension APIClient {
             completion: completion
         )
     }
+
+    private struct EditCommentBody: Encodable {
+        let anonymousId: String
+        let body: String
+    }
+
+    func editComment(
+        requestId: String,
+        commentId: String,
+        anonymousId: String,
+        body: String,
+        completion: @escaping (Result<RequestComment, APIError>) -> Void
+    ) {
+        patchJSON(
+            path: SDKEndpoint.requestComment(requestId, commentId),
+            body: EditCommentBody(anonymousId: anonymousId, body: body),
+            responseType: RequestComment.self,
+            completion: completion
+        )
+    }
+
+    func deleteComment(
+        requestId: String,
+        commentId: String,
+        anonymousId: String,
+        completion: @escaping (Result<Void, APIError>) -> Void
+    ) {
+        deleteVoid(
+            path: SDKEndpoint.requestComment(requestId, commentId),
+            query: [URLQueryItem(name: "anonymousId", value: anonymousId)],
+            completion: completion
+        )
+    }
+
+    func getRequestBranding(
+        completion: @escaping (Result<RequestBranding, APIError>) -> Void
+    ) {
+        get(
+            path: SDKEndpoint.requestBranding,
+            responseType: RequestBranding.self,
+            completion: completion
+        )
+    }
 }
 

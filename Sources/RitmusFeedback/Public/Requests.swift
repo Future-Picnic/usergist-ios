@@ -161,6 +161,15 @@ public enum RequestsError: Error {
     case notImplemented(String)
 }
 
+/// Per-app branding pulled from the dashboard. The SDK UI reads this
+/// once on first open and applies the accent + label + intro copy.
+public struct RequestBranding: Codable, Sendable, Equatable {
+    public let entryLabel: String
+    public let accentColor: String?
+    public let logoUrl: String?
+    public let introCopy: String?
+}
+
 public extension Ritmus {
     /// Open the SDK-provided requests board UI.
     func openRequestsBoard() {
@@ -267,6 +276,50 @@ public extension Ritmus {
     ) {
         withRuntimeForRequests { rt in
             rt.postComment(requestId: requestId, body: body, completion: completion)
+        }
+    }
+
+    /// Edit one of the viewer's own comments. Server returns 404 if not theirs.
+    func editComment(
+        requestId: String,
+        commentId: String,
+        body: String,
+        completion: @escaping (Result<RequestComment, Error>) -> Void
+    ) {
+        guard !body.isEmpty, body.count <= 1000 else {
+            completion(.failure(RequestsError.validation("comment body required, max 1000 chars")))
+            return
+        }
+        withRuntimeForRequests { rt in
+            rt.editComment(
+                requestId: requestId,
+                commentId: commentId,
+                body: body,
+                completion: completion
+            )
+        }
+    }
+
+    /// Delete one of the viewer's own comments.
+    func deleteComment(
+        requestId: String,
+        commentId: String,
+        completion: ((Result<Void, Error>) -> Void)? = nil
+    ) {
+        withRuntimeForRequests { rt in
+            rt.deleteComment(requestId: requestId, commentId: commentId) { result in
+                completion?(result)
+            }
+        }
+    }
+
+    /// Fetch per-app branding (entry label, accent color, etc.). The
+    /// SDK UI uses this automatically; host apps rarely need to call it.
+    func getRequestBranding(
+        completion: @escaping (Result<RequestBranding, Error>) -> Void
+    ) {
+        withRuntimeForRequests { rt in
+            rt.getRequestBranding(completion: completion)
         }
     }
 

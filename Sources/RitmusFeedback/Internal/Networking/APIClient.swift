@@ -134,6 +134,46 @@ final class APIClient {
         performWithRetry(request: request, attempt: 0, completion: completion)
     }
 
+    /// PATCH with JSON body + decoded response.
+    func patchJSON<Request: Encodable, Response: Decodable>(
+        path: String,
+        body: Request,
+        responseType: Response.Type,
+        completion: @escaping (Result<Response, APIError>) -> Void
+    ) {
+        let data: Data
+        do {
+            data = try JSONEncoder.ritmus().encode(body)
+        } catch {
+            callbackQueue.async { completion(.failure(.transport(error))) }
+            return
+        }
+        guard let request = buildRequest(method: "PATCH", path: path, body: data) else {
+            callbackQueue.async { completion(.failure(.invalidURL)) }
+            return
+        }
+        performWithRetry(request: request, attempt: 0, completion: completion)
+    }
+
+    /// DELETE returning only success/failure. Accepts optional query params
+    /// (the SDK uses them to carry anonymousId on author-checked deletes).
+    func deleteVoid(
+        path: String,
+        query: [URLQueryItem] = [],
+        completion: @escaping (Result<Void, APIError>) -> Void
+    ) {
+        guard let request = buildRequest(method: "DELETE", path: path, query: query, body: nil) else {
+            callbackQueue.async { completion(.failure(.invalidURL)) }
+            return
+        }
+        performWithRetry(request: request, attempt: 0) { (result: Result<EmptyResponse, APIError>) in
+            switch result {
+            case .success: completion(.success(()))
+            case .failure(let err): completion(.failure(err))
+            }
+        }
+    }
+
     // MARK: - Surveys (v1 surface)
 
     private struct AvailableSurveysEnvelope: Decodable {

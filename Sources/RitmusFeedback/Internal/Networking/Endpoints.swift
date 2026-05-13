@@ -34,4 +34,8 @@ enum SDKEndpoint {
     static func requestVote(_ id: String) -> String { "\(basePath)/requests/\(id)/vote" }
     static func requestFollow(_ id: String) -> String { "\(basePath)/requests/\(id)/follow" }
     static func requestComments(_ id: String) -> String { "\(basePath)/requests/\(id)/comments" }
+    static func requestComment(_ requestId: String, _ commentId: String) -> String {
+        "\(basePath)/requests/\(requestId)/comments/\(commentId)"
+    }
+    static let requestBranding = "\(basePath)/request-branding"
 }
