@@ -1,19 +1,19 @@
-# RitmusFeedback iOS SDK
+# UserGistFeedback iOS SDK
 
-Native Swift SDK for the Ritmus feedback pillar. Drop it into your iOS app via
+Native Swift SDK for the userGist feedback pillar. Drop it into your iOS app via
 Swift Package Manager and start collecting in-app feedback in minutes.
 
 ```swift
-import RitmusFeedback
+import UserGistFeedback
 
-Ritmus.shared.initialize(
+UserGist.shared.initialize(
     writeKey: "pk_live_xxx",
     environment: .production
 )
 
-Ritmus.shared.setConsent(Consent(analytics: true, feedback: true))
-Ritmus.shared.identify(userId: "user-123", properties: ["plan": "pro"])
-Ritmus.shared.track("completed_checkout", properties: ["amount": 42.0])
+UserGist.shared.setConsent(Consent(analytics: true, feedback: true))
+UserGist.shared.identify(userId: "user-123", properties: ["plan": "pro"])
+UserGist.shared.track("completed_checkout", properties: ["amount": 42.0])
 ```
 
 Prompts are rendered locally the instant a trigger fires — no network
@@ -32,7 +32,7 @@ Or in `Package.swift`:
 
 ## Public API
 
-See `Sources/RitmusFeedback/Ritmus.swift` and `Sources/RitmusFeedback/Public/`.
+See `Sources/UserGistFeedback/UserGist.swift` and `Sources/UserGistFeedback/Public/`.
 
 ## Running tests
 

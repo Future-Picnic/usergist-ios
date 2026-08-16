@@ -2,29 +2,29 @@
 import PackageDescription
 
 let package = Package(
-    name: "RitmusFeedback",
+    name: "UserGistFeedback",
     platforms: [.iOS(.v14)],
     products: [
-        .library(name: "RitmusFeedback", targets: ["RitmusFeedback"]),
+        .library(name: "UserGistFeedback", targets: ["UserGistFeedback"]),
         // Notification Service Extension product. Host apps add a new
         // NSE target in Xcode and depend on this product so the
         // extension can intercept incoming pushes, beacon back true
         // delivered_at, and download rich-media attachments.
-        .library(name: "RitmusFeedbackNSE", targets: ["RitmusFeedbackNSE"])
+        .library(name: "UserGistFeedbackNSE", targets: ["UserGistFeedbackNSE"])
     ],
     targets: [
         .target(
-            name: "RitmusFeedback",
-            path: "Sources/RitmusFeedback"
+            name: "UserGistFeedback",
+            path: "Sources/UserGistFeedback"
         ),
         .target(
-            name: "RitmusFeedbackNSE",
-            path: "Sources/RitmusFeedbackNSE"
+            name: "UserGistFeedbackNSE",
+            path: "Sources/UserGistFeedbackNSE"
         ),
         .testTarget(
-            name: "RitmusFeedbackTests",
-            dependencies: ["RitmusFeedback"],
-            path: "Tests/RitmusFeedbackTests"
+            name: "UserGistFeedbackTests",
+            dependencies: ["UserGistFeedback"],
+            path: "Tests/UserGistFeedbackTests"
         )
     ]
 )
