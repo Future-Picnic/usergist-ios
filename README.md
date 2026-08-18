@@ -1,13 +1,14 @@
-# UserGistFeedback iOS SDK
+# UserGistFeedback iOS SDK (experimental)
 
-Native Swift SDK for the userGist feedback pillar. Drop it into your iOS app via
-Swift Package Manager and start collecting in-app feedback in minutes.
+This native Swift SDK is not launch-supported yet. Its authenticated-subject,
+durable-instruction, endpoint-parity, and release-device gates are tracked in
+`packages/PARITY.md`. Use the React Native SDK for the supported v0.1 launch.
 
 ```swift
 import UserGistFeedback
 
 UserGist.shared.initialize(
-    writeKey: "pk_live_xxx",
+    writeKey: "rk_live_xxx",
     environment: .production
 )
 
@@ -16,8 +17,8 @@ UserGist.shared.identify(userId: "user-123", properties: ["plan": "pro"])
 UserGist.shared.track("completed_checkout", properties: ["amount": 42.0])
 ```
 
-Prompts are rendered locally the instant a trigger fires — no network
-round-trip. See `DEV_PRD.md` §6 for full architecture.
+Local prompt evaluation in this package is experimental and is not the
+server-authoritative delivery contract used by the launch-supported RN SDK.
 
 ## Installation
 

@@ -20,7 +20,7 @@ public enum Environment: String, Sendable {
         case .staging:
             return URL(string: "https://api.staging.usergist.studio")!
         case .development:
-            return URL(string: "http://localhost:3000")!
+            return URL(string: "http://localhost:28743")!
         }
     }
 }
