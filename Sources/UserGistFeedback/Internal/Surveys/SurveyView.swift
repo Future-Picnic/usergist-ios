@@ -17,18 +17,24 @@ final class SurveyViewModel: ObservableObject {
     let surveyId: String
     let attemptId: String
     private let store: SurveyStore
+    private let onProgress: (String, String?, [String: SurveyAnswerValue]) -> Void
+    private let onComplete: (String, [String: SurveyAnswerValue]) -> Void
 
     init(
         flow: SurveyFlow,
         surveyId: String,
         attemptId: String,
         store: SurveyStore,
-        resume: SurveyAttempt?
+        resume: SurveyAttempt?,
+        onProgress: @escaping (String, String?, [String: SurveyAnswerValue]) -> Void,
+        onComplete: @escaping (String, [String: SurveyAnswerValue]) -> Void
     ) {
         self.flow = flow
         self.surveyId = surveyId
         self.attemptId = attemptId
         self.store = store
+        self.onProgress = onProgress
+        self.onComplete = onComplete
         if let resume = resume {
             self.answers = resume.answers
             self.currentQuestionId = resume.currentQuestionId
@@ -62,18 +68,31 @@ final class SurveyViewModel: ObservableObject {
             value: value,
             nextQuestionId: next
         )
-        if next == nil { isComplete = true }
+        onProgress(attemptId, next, answers)
+        if next == nil {
+            isComplete = true
+            onComplete(attemptId, answers)
+        }
     }
 }
 
 @available(iOS 14.0, *)
 struct SurveyView: View {
     @ObservedObject var viewModel: SurveyViewModel
-    let onDismiss: () -> Void
+    let onClose: () -> Void
+    let onAbandon: () -> Void
     @State private var textAnswer: String = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Spacer()
+                Button(action: viewModel.isComplete ? onClose : onAbandon) {
+                    Image(systemName: "xmark")
+                        .padding(8)
+                }
+                .accessibilityLabel("Close survey")
+            }
             ProgressView(value: viewModel.progress)
             if viewModel.isComplete {
                 completionView
@@ -91,20 +110,20 @@ struct SurveyView: View {
             Text("Thanks for your feedback")
                 .font(.title2)
                 .bold()
-            Button(action: onDismiss) {
+            Button(action: onClose) {
                 Text("Close")
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
             }
-            .buttonStyle(.borderedProminent)
+            .userGistProminentButton()
         }
     }
 
     @ViewBuilder
     private func questionView(_ q: SurveyQuestion) -> some View {
-        Text(q.text)
+        Text(q.title)
             .font(.headline)
-        if let helper = q.helperText {
+        if let helper = q.subtitle {
             Text(helper)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
@@ -114,10 +133,10 @@ struct SurveyView: View {
 
     @ViewBuilder
     private func questionInput(_ q: SurveyQuestion) -> some View {
-        switch q.kind {
+        switch q.type {
         case .rating, .nps:
-            let min = q.minRating ?? (q.kind == .nps ? 0 : 1)
-            let max = q.maxRating ?? (q.kind == .nps ? 10 : 5)
+            let min = q.type == .nps ? 0 : 1
+            let max = q.type == .nps ? 10 : (q.scale ?? 5)
             HStack {
                 ForEach(min...max, id: \.self) { v in
                     Button(action: {
@@ -140,12 +159,12 @@ struct SurveyView: View {
                 }) {
                     Text("Next").frame(maxWidth: .infinity).padding(.vertical, 10)
                 }
-                .buttonStyle(.borderedProminent)
+                .userGistProminentButton()
                 .disabled(textAnswer.isEmpty && (q.required ?? true))
             }
         case .singleChoice:
             VStack(spacing: 8) {
-                ForEach(q.choices ?? [], id: \.id) { choice in
+                ForEach(q.options ?? [], id: \.id) { choice in
                     Button(action: {
                         viewModel.recordAnswer(.string(choice.id))
                     }) {
@@ -160,20 +179,46 @@ struct SurveyView: View {
             }
         case .multiChoice:
             multiChoiceInput(q)
-        default:
-            // info / likert / ranking / date — minimal "next" fallback so
-            // the survey advances rather than blocking the user.
+        case .likert:
+            VStack(spacing: 8) {
+                ForEach(Array((q.labels ?? [
+                    "Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"
+                ]).enumerated()), id: \.offset) { index, label in
+                    Button(action: { viewModel.recordAnswer(.int(index + 1)) }) {
+                        Text(label)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                    .foregroundColor(.primary)
+                }
+            }
+        case .ranking:
+            RankingList(items: q.items ?? []) { ids in
+                viewModel.recordAnswer(.stringArray(ids))
+            }
+        case .singleDate:
+            DateAnswer(onSubmit: { date in
+                viewModel.recordAnswer(.string(date))
+            })
+        case .infoScreen:
+            if let body = q.body {
+                Text(body).foregroundColor(.secondary)
+            }
             Button(action: { viewModel.recordAnswer(.string("")) }) {
                 Text("Continue").frame(maxWidth: .infinity).padding(.vertical, 10)
             }
-            .buttonStyle(.borderedProminent)
+            .userGistProminentButton()
         }
     }
 
     @ViewBuilder
     private func multiChoiceInput(_ q: SurveyQuestion) -> some View {
         MultiChoiceList(
-            choices: q.choices ?? [],
+            choices: q.options ?? [],
+            minimum: q.minSelections ?? 0,
+            maximum: q.maxSelections,
             onSubmit: { selected in
                 viewModel.recordAnswer(.stringArray(selected))
             }
@@ -184,6 +229,8 @@ struct SurveyView: View {
 @available(iOS 14.0, *)
 private struct MultiChoiceList: View {
     let choices: [SurveyChoice]
+    let minimum: Int
+    let maximum: Int?
     let onSubmit: ([String]) -> Void
     @State private var selected = Set<String>()
 
@@ -193,7 +240,7 @@ private struct MultiChoiceList: View {
                 Button(action: {
                     if selected.contains(c.id) {
                         selected.remove(c.id)
-                    } else {
+                    } else if maximum == nil || selected.count < maximum! {
                         selected.insert(c.id)
                     }
                 }) {
@@ -211,7 +258,81 @@ private struct MultiChoiceList: View {
             Button(action: { onSubmit(Array(selected)) }) {
                 Text("Next").frame(maxWidth: .infinity).padding(.vertical, 10)
             }
-            .buttonStyle(.borderedProminent)
+            .userGistProminentButton()
+            .disabled(selected.count < minimum)
         }
+    }
+}
+
+@available(iOS 14.0, *)
+private struct RankingList: View {
+    @State private var ordered: [SurveyChoice]
+    let onSubmit: ([String]) -> Void
+
+    init(items: [SurveyChoice], onSubmit: @escaping ([String]) -> Void) {
+        _ordered = State(initialValue: items)
+        self.onSubmit = onSubmit
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ForEach(Array(ordered.enumerated()), id: \.element.id) { index, item in
+                HStack {
+                    Text("\(index + 1). \(item.label)")
+                    Spacer()
+                    Button(action: { move(index, -1) }) { Image(systemName: "chevron.up") }
+                        .disabled(index == 0)
+                    Button(action: { move(index, 1) }) { Image(systemName: "chevron.down") }
+                        .disabled(index == ordered.count - 1)
+                }
+                .padding(10)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(8)
+            }
+            Button(action: { onSubmit(ordered.map(\.id)) }) {
+                Text("Next").frame(maxWidth: .infinity).padding(.vertical, 10)
+            }
+            .userGistProminentButton()
+        }
+    }
+
+    private func move(_ index: Int, _ delta: Int) {
+        let destination = index + delta
+        guard ordered.indices.contains(index), ordered.indices.contains(destination) else { return }
+        ordered.swapAt(index, destination)
+    }
+}
+
+@available(iOS 14.0, *)
+private struct DateAnswer: View {
+    let onSubmit: (String) -> Void
+    @State private var selected = Date()
+
+    var body: some View {
+        VStack(spacing: 12) {
+            DatePicker("Date", selection: $selected, displayedComponents: .date)
+            Button(action: {
+                let formatter = DateFormatter()
+                formatter.calendar = Calendar(identifier: .gregorian)
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.dateFormat = "yyyy-MM-dd"
+                onSubmit(formatter.string(from: selected))
+            }) {
+                Text("Next").frame(maxWidth: .infinity).padding(.vertical, 10)
+            }
+            .userGistProminentButton()
+        }
+    }
+}
+
+@available(iOS 14.0, *)
+private extension View {
+    /// iOS 14-compatible equivalent of the iOS 15 bordered-prominent style.
+    func userGistProminentButton() -> some View {
+        self
+            .buttonStyle(PlainButtonStyle())
+            .foregroundColor(.white)
+            .background(Color.accentColor)
+            .cornerRadius(8)
     }
 }

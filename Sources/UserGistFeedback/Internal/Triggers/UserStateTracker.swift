@@ -7,15 +7,32 @@ import Foundation
 /// the serialized form shipped via armed triggers — so we only need:
 /// `properties`, `eventCounts[eventName][windowDays]`, and `lastEventAt`.
 final class UserStateTracker {
+    private struct Persisted: Codable {
+        let version: Int
+        let history: [String: [Date]]
+    }
+
     private let queue: DispatchQueue
+    private let storage: Storage
+    private let logger: UserGistLogger
     private var state: UserState = .empty
     /// Ring of event timestamps per event name, newest last.
     private var timestampsByEvent: [String: [Date]] = [:]
     /// Window sizes seen in armed triggers — recomputed from rules cache.
     private var knownWindows: Set<Int> = []
 
-    init(queue: DispatchQueue) {
+    init(queue: DispatchQueue, storage: Storage, logger: UserGistLogger) {
         self.queue = queue
+        self.storage = storage
+        self.logger = logger
+        if let persisted = (try? storage.readJSON(
+            Persisted.self,
+            at: storage.userStateFile
+        )) ?? nil {
+            self.timestampsByEvent = persisted.history.mapValues {
+                Array($0.suffix(Self.historyCapPerEvent))
+            }
+        }
     }
 
     /// Thread-safe snapshot used by `TriggerMatcher`.
@@ -42,6 +59,16 @@ final class UserStateTracker {
         }
     }
 
+    func setPersistedProperties(_ properties: [String: SegmentScalar]?) {
+        queue.sync {
+            state = UserState(
+                properties: properties ?? [:],
+                eventCounts: state.eventCounts,
+                lastEventAt: state.lastEventAt
+            )
+        }
+    }
+
     /// Record that an event happened. Updates `lastEventAt` and recomputes
     /// the windowed counters for all known window sizes.
     func recordEvent(name: String, at date: Date) {
@@ -51,7 +78,11 @@ final class UserStateTracker {
             // Keep only last 365 days to bound memory.
             let floor = date.addingTimeInterval(-365 * 86_400)
             ring = ring.filter { $0 >= floor }
+            if ring.count > Self.historyCapPerEvent {
+                ring = Array(ring.suffix(Self.historyCapPerEvent))
+            }
             timestampsByEvent[name] = ring
+            persistLocked()
 
             var lastEventAt = state.lastEventAt
             lastEventAt[name] = date
@@ -79,7 +110,9 @@ final class UserStateTracker {
             knownWindows = windows
             let now = Date()
             var newCounts: [String: [Int: Int]] = [:]
+            var newLastEventAt: [String: Date] = [:]
             for (name, ring) in timestampsByEvent {
+                if let last = ring.last { newLastEventAt[name] = last }
                 var bucket: [Int: Int] = [:]
                 for windowDays in windows where windowDays > 0 {
                     let cutoff = now.addingTimeInterval(-Double(windowDays) * 86_400)
@@ -90,7 +123,7 @@ final class UserStateTracker {
             state = UserState(
                 properties: state.properties,
                 eventCounts: newCounts,
-                lastEventAt: state.lastEventAt
+                lastEventAt: newLastEventAt
             )
         }
     }
@@ -99,6 +132,18 @@ final class UserStateTracker {
         queue.sync {
             state = .empty
             timestampsByEvent = [:]
+            try? storage.deleteFile(at: storage.userStateFile)
+        }
+    }
+
+    private func persistLocked() {
+        do {
+            try storage.writeJSON(
+                Persisted(version: 1, history: timestampsByEvent),
+                to: storage.userStateFile
+            )
+        } catch {
+            logger.error("user-state persist failed", error: error)
         }
     }
 
@@ -126,4 +171,17 @@ final class UserStateTracker {
         }
         return out
     }
+
+    static func windows(from surveys: [ArmedSurvey]) -> Set<Int> {
+        var out = Set<Int>()
+        for survey in surveys {
+            guard let rules = survey.segmentRules else { continue }
+            for rule in rules.eventCounts ?? [] {
+                out.insert(rule.windowDays)
+            }
+        }
+        return out
+    }
+
+    private static let historyCapPerEvent = 200
 }

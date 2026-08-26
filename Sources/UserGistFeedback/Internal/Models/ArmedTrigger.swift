@@ -6,6 +6,7 @@ struct ArmedTrigger: Codable, Equatable {
     let promptId: String
     let eventName: String
     let segmentRules: SerializedSegmentRules?
+    let clientSideEligible: Bool?
     let frequency: FrequencyCaps
     let prompt: ClientPrompt
 }

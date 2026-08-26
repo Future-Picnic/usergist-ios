@@ -7,7 +7,7 @@ final class MultipleChoiceQuestionView: UIView, QuestionView {
     private let theme: ResolvedTheme
     private let stack = UIStackView()
     private var buttons: [UIButton] = []
-    private var selectedIds: Set<String> = []
+    private var selectedIds: [String] = []
     var onValueChange: ((PromptAnswerValue) -> Void)?
 
     init(question: Question.MultipleChoice, theme: ResolvedTheme) {
@@ -20,11 +20,7 @@ final class MultipleChoiceQuestionView: UIView, QuestionView {
     required init?(coder: NSCoder) { nil }
 
     var currentAnswer: PromptAnswerValue {
-        if selectedIds.isEmpty { return .none }
-        if question.multiSelect == true {
-            return .choices(Array(selectedIds))
-        }
-        return .choices(Array(selectedIds))
+        selectedIds.isEmpty ? .none : .choices(selectedIds)
     }
 
     private func buildUI() {
@@ -50,15 +46,17 @@ final class MultipleChoiceQuestionView: UIView, QuestionView {
     private func makeButton(option: QuestionChoice, index: Int) -> UIButton {
         let button = UIButton(type: .system)
         button.setTitle(option.label, for: .normal)
-        button.titleLabel?.font = theme.font
+        button.titleLabel?.font = theme.boldFont
         button.setTitleColor(theme.text, for: .normal)
         button.backgroundColor = theme.background
         button.contentHorizontalAlignment = .leading
-        button.contentEdgeInsets = UIEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+        button.contentEdgeInsets = UIEdgeInsets(top: 14, left: 14, bottom: 14, right: 14)
         button.layer.borderWidth = 1
         button.layer.borderColor = theme.border.cgColor
-        button.layer.cornerRadius = min(theme.radius * 0.5, 12)
+        button.layer.cornerRadius = 14
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
         button.tag = index
+        button.accessibilityLabel = option.label
         button.addTarget(self, action: #selector(didTap(_:)), for: .touchUpInside)
         return button
     }
@@ -67,10 +65,10 @@ final class MultipleChoiceQuestionView: UIView, QuestionView {
         let option = question.options[sender.tag]
         Haptics.impactLight()
         if question.multiSelect == true {
-            if selectedIds.contains(option.id) {
-                selectedIds.remove(option.id)
+            if let index = selectedIds.firstIndex(of: option.id) {
+                selectedIds.remove(at: index)
             } else {
-                selectedIds.insert(option.id)
+                selectedIds.append(option.id)
             }
         } else {
             selectedIds = [option.id]
@@ -83,9 +81,10 @@ final class MultipleChoiceQuestionView: UIView, QuestionView {
         for (idx, button) in buttons.enumerated() {
             let option = question.options[idx]
             let isSelected = selectedIds.contains(option.id)
-            button.backgroundColor = isSelected ? theme.primary.withAlphaComponent(0.12) : theme.background
+            button.backgroundColor = isSelected ? theme.primary : theme.background
             button.layer.borderColor = (isSelected ? theme.primary : theme.border).cgColor
-            button.setTitleColor(isSelected ? theme.primary : theme.text, for: .normal)
+            button.setTitleColor(isSelected ? theme.background : theme.text, for: .normal)
+            button.accessibilityTraits = isSelected ? [.button, .selected] : .button
         }
     }
 }

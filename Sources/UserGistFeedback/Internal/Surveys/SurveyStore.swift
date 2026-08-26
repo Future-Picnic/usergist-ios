@@ -50,6 +50,28 @@ final class SurveyStore {
         }
     }
 
+    /// Persists the server-authoritative attempt returned by create/resume.
+    /// The API owns attempt ids; native code must never invent one locally.
+    func upsert(
+        surveyId: String,
+        attemptId: String,
+        answers: [String: SurveyAnswerValue],
+        currentQuestionId: String?
+    ) -> SurveyAttempt {
+        queue.sync {
+            let attempt = SurveyAttempt(
+                attemptId: attemptId,
+                surveyId: surveyId,
+                answers: answers,
+                currentQuestionId: currentQuestionId,
+                startedAt: attempts[surveyId]?.startedAt ?? Date()
+            )
+            attempts[surveyId] = attempt
+            persistLocked()
+            return attempt
+        }
+    }
+
     /// Records an answer and updates the current question pointer.
     func recordAnswer(surveyId: String, questionId: String, value: SurveyAnswerValue, nextQuestionId: String?) {
         queue.sync {
@@ -65,6 +87,13 @@ final class SurveyStore {
     func clear(surveyId: String) {
         queue.sync {
             attempts.removeValue(forKey: surveyId)
+            persistLocked()
+        }
+    }
+
+    func clearAll() {
+        queue.sync {
+            attempts.removeAll()
             persistLocked()
         }
     }

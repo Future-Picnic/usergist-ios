@@ -75,7 +75,7 @@ final class EventQueueTests: XCTestCase {
         let raw = try Data(contentsOf: storage.eventsLog)
         let json = try JSONSerialization.jsonObject(with: raw) as? [String: Any]
         XCTAssertNotNil(json)
-        XCTAssertEqual(json?["version"] as? Int, 1)
+        XCTAssertEqual(json?["version"] as? Int, 2)
         let events = json?["events"] as? [[String: Any]]
         XCTAssertEqual(events?.count, 1)
         XCTAssertEqual(events?.first?["name"] as? String, "alpha")
@@ -103,7 +103,7 @@ final class EventQueueTests: XCTestCase {
         queue.enqueue(makeEvent(name: "fresh"))
         let raw = try Data(contentsOf: storage.eventsLog)
         let json = try JSONSerialization.jsonObject(with: raw) as? [String: Any]
-        XCTAssertEqual(json?["version"] as? Int, 1)
+        XCTAssertEqual(json?["version"] as? Int, 2)
     }
 
     func test_discardsUnknownVersion() throws {

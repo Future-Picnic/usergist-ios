@@ -1,12 +1,7 @@
 // Feature requests (5th pillar) — public API surface for sdk-ios.
 //
-// STATUS: API surface declared; HTTP wiring + UI presentation tracked in
-// PARITY.md as the iOS-stub for this pillar. Mirrors the React Native
-// reference 1:1 (method names adapted to Swift conventions).
-//
-// Internal client + UI screens land in a follow-up. The types here are
-// intentionally `public` so host apps can compile against the surface
-// today and the runtime fills in once the implementation lands.
+// HTTP transport, optimistic cache behavior, debounced search, and the native
+// requests board are implemented. PARITY.md tracks remaining release testing.
 
 import Foundation
 

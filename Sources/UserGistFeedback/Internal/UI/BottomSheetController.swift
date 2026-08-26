@@ -1,28 +1,24 @@
 import Foundation
 import UIKit
 
-/// Hosts the `PromptView` inside a bottom sheet. Uses the native
-/// `UISheetPresentationController` on iOS 15+, falls back to a custom
-/// transitioning delegate on iOS 14.
+/// Hosts `PromptView` inside a content-sized bottom sheet whose visible
+/// structure matches the React Native/dashboard preview on every iOS version.
 final class BottomSheetController: UIViewController {
     private let promptView: PromptView
     private let theme: ResolvedTheme
+    private let sheetTransition = PromptSheetTransitioning()
 
     init(promptView: PromptView, theme: ResolvedTheme) {
         self.promptView = promptView
         self.theme = theme
         super.init(nibName: nil, bundle: nil)
-
-        if #available(iOS 15.0, *) {
-            modalPresentationStyle = .pageSheet
-            if let sheet = sheetPresentationController {
-                sheet.detents = [.medium(), .large()]
-                sheet.prefersGrabberVisible = true
-                sheet.preferredCornerRadius = theme.radius
-            }
-        } else {
-            modalPresentationStyle = .custom
-            transitioningDelegate = Fallback14Transitioning.shared
+        modalPresentationStyle = .custom
+        transitioningDelegate = sheetTransition
+        preferredContentSize = CGSize(width: 0, height: 280)
+        promptView.onPreferredHeightChange = { [weak self] height in
+            guard let self else { return }
+            self.preferredContentSize = CGSize(width: 0, height: height)
+            self.presentationController?.containerView?.setNeedsLayout()
         }
     }
 
@@ -44,28 +40,45 @@ final class BottomSheetController: UIViewController {
             promptView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
         ])
     }
+
+    func requestDismiss() {
+        promptView.dismiss()
+    }
 }
 
-// MARK: - iOS 14 fallback transitioning
+// MARK: - Custom content-sized sheet
 
-private final class Fallback14Transitioning: NSObject, UIViewControllerTransitioningDelegate {
-    static let shared = Fallback14Transitioning()
-
+private final class PromptSheetTransitioning: NSObject, UIViewControllerTransitioningDelegate {
     func presentationController(
         forPresented presented: UIViewController,
         presenting: UIViewController?,
         source: UIViewController
     ) -> UIPresentationController? {
-        Fallback14PresentationController(presentedViewController: presented, presenting: presenting)
+        PromptSheetPresentationController(presentedViewController: presented, presenting: presenting)
+    }
+
+    func animationController(
+        forPresented presented: UIViewController,
+        presenting: UIViewController,
+        source: UIViewController
+    ) -> UIViewControllerAnimatedTransitioning? {
+        PromptSheetAnimator(presenting: true)
+    }
+
+    func animationController(forDismissed dismissed: UIViewController) -> UIViewControllerAnimatedTransitioning? {
+        PromptSheetAnimator(presenting: false)
     }
 }
 
-private final class Fallback14PresentationController: UIPresentationController {
+private final class PromptSheetPresentationController: UIPresentationController {
     private let dimmer = UIView()
 
     override var frameOfPresentedViewInContainerView: CGRect {
         guard let container = containerView else { return .zero }
-        let height = min(container.bounds.height * 0.6, container.bounds.height - 80)
+        let safeTop = container.safeAreaInsets.top
+        let maxHeight = max(280, container.bounds.height - safeTop - 16)
+        let requested = presentedViewController.preferredContentSize.height
+        let height = min(max(requested, 280), maxHeight)
         let y = container.bounds.height - height
         return CGRect(x: 0, y: y, width: container.bounds.width, height: height)
     }
@@ -75,7 +88,7 @@ private final class Fallback14PresentationController: UIPresentationController {
         dimmer.frame = container.bounds
         dimmer.backgroundColor = UIColor.black.withAlphaComponent(0.35)
         dimmer.alpha = 0
-        container.addSubview(dimmer)
+        container.insertSubview(dimmer, at: 0)
         let tap = UITapGestureRecognizer(target: self, action: #selector(didTapDimmer))
         dimmer.addGestureRecognizer(tap)
 
@@ -91,11 +104,59 @@ private final class Fallback14PresentationController: UIPresentationController {
     }
 
     @objc private func didTapDimmer() {
-        presentedViewController.dismiss(animated: true)
+        (presentedViewController as? BottomSheetController)?.requestDismiss()
     }
 
     override func containerViewDidLayoutSubviews() {
         super.containerViewDidLayoutSubviews()
         presentedView?.frame = frameOfPresentedViewInContainerView
+    }
+}
+
+private final class PromptSheetAnimator: NSObject, UIViewControllerAnimatedTransitioning {
+    private let presenting: Bool
+
+    init(presenting: Bool) {
+        self.presenting = presenting
+    }
+
+    func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
+        0.28
+    }
+
+    func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {
+        let duration = transitionDuration(using: transitionContext)
+        if presenting {
+            guard let toView = transitionContext.view(forKey: .to) else {
+                transitionContext.completeTransition(false)
+                return
+            }
+            transitionContext.containerView.addSubview(toView)
+            let finalFrame = transitionContext.finalFrame(for: transitionContext.viewController(forKey: .to)!)
+            toView.frame = finalFrame.offsetBy(dx: 0, dy: finalFrame.height)
+            UIView.animate(
+                withDuration: duration,
+                delay: 0,
+                options: [.curveEaseOut, .beginFromCurrentState]
+            ) {
+                toView.frame = finalFrame
+            } completion: { finished in
+                transitionContext.completeTransition(finished)
+            }
+        } else {
+            guard let fromView = transitionContext.view(forKey: .from) else {
+                transitionContext.completeTransition(false)
+                return
+            }
+            UIView.animate(
+                withDuration: duration,
+                delay: 0,
+                options: [.curveEaseIn, .beginFromCurrentState]
+            ) {
+                fromView.frame = fromView.frame.offsetBy(dx: 0, dy: fromView.frame.height)
+            } completion: { finished in
+                transitionContext.completeTransition(finished)
+            }
+        }
     }
 }

@@ -32,7 +32,7 @@ final class TriggerMatcher {
     }
 
     func match(eventName: String) -> ArmedTrigger? {
-        guard consent.allowsTransport else {
+        guard consent.current().feedback == true else {
             logger.debug("trigger[\(eventName)] suppressed: consent gate")
             return nil
         }
@@ -40,6 +40,10 @@ final class TriggerMatcher {
         if candidates.isEmpty { return nil }
         let user = userState()
         for trigger in candidates {
+            if trigger.clientSideEligible == false {
+                logger.debug("trigger[\(trigger.promptId)] suppressed: server authoritative")
+                continue
+            }
             if !SegmentEvaluator.evaluate(trigger.segmentRules, user: user) {
                 logger.debug("trigger[\(trigger.promptId)] suppressed: segment miss")
                 continue

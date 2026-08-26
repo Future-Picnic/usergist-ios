@@ -5,11 +5,6 @@ import UIKit
 /// bottom sheet over it, then translates the UI outcome into the payloads
 /// the rest of the SDK expects.
 final class PromptPresenter {
-    enum PresentError: Error {
-        case noActiveWindow
-        case alreadyPresented
-    }
-
     struct PresentationContext {
         let prompt: ClientPrompt
         let theme: ResolvedTheme
@@ -17,6 +12,7 @@ final class PromptPresenter {
     }
 
     private weak var currentController: UIViewController?
+    private var releaseCurrent: (() -> Void)?
 
     /// Presents the prompt and delivers the outcome via `onFinish`.
     /// Safe to call from any thread — always dispatches to main.
@@ -29,15 +25,10 @@ final class PromptPresenter {
         let theme = context.theme
         let shownAt = context.shownAt
 
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            guard self.currentController == nil else {
-                onFinish(PromptResponseInfo(promptId: prompt.id, answers: [], dismissed: true, latencyMs: 0))
-                return
-            }
+        SDKModalCoordinator.shared.enqueue(owner: self) { [weak self] release in
+            guard let self else { return false }
             guard let top = Self.resolveTopViewController() else {
-                onFinish(PromptResponseInfo(promptId: prompt.id, answers: [], dismissed: true, latencyMs: 0))
-                return
+                return false
             }
 
             var container: BottomSheetController!
@@ -52,23 +43,39 @@ final class PromptPresenter {
                         dismissed: false,
                         latencyMs: max(0, latency)
                     )
-                case .dismissed:
+                case .dismissed(let answers):
                     info = PromptResponseInfo(
                         promptId: prompt.id,
-                        answers: [],
+                        answers: answers,
                         dismissed: true,
                         latencyMs: max(0, latency)
                     )
                 }
                 container?.dismiss(animated: true) {
                     onFinish(info)
+                    self.currentController = nil
+                    self.releaseCurrent = nil
+                    release()
                 }
             }
             container = BottomSheetController(promptView: view, theme: theme)
             self.currentController = container
+            self.releaseCurrent = release
             top.present(container, animated: true) {
                 onShown()
             }
+            return true
+        }
+    }
+
+    func reset() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            SDKModalCoordinator.shared.cancelPending(owner: self)
+            self.currentController?.dismiss(animated: false)
+            self.currentController = nil
+            self.releaseCurrent?()
+            self.releaseCurrent = nil
         }
     }
 

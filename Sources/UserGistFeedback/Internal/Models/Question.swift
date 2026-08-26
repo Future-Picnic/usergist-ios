@@ -17,10 +17,18 @@ enum Question: Codable, Equatable {
     case shortText(ShortText)
 
     struct Rating: Codable, Equatable {
+        enum Display: String, Codable {
+            case stars
+            case numeric
+            case emoji
+        }
+
         let id: String
         let title: String
         let subtitle: String?
+        let imageUrl: String?
         let scale: Int
+        let display: Display?
         let lowLabel: String?
         let highLabel: String?
     }
@@ -29,13 +37,17 @@ enum Question: Codable, Equatable {
         let id: String
         let title: String
         let subtitle: String?
+        let imageUrl: String?
         let followUp: String?
+        let lowLabel: String?
+        let highLabel: String?
     }
 
     struct MultipleChoice: Codable, Equatable {
         let id: String
         let title: String
         let subtitle: String?
+        let imageUrl: String?
         let options: [QuestionChoice]
         let multiSelect: Bool?
     }
@@ -44,6 +56,7 @@ enum Question: Codable, Equatable {
         let id: String
         let title: String
         let subtitle: String?
+        let imageUrl: String?
         let placeholder: String?
         let maxLength: Int?
     }
@@ -72,6 +85,15 @@ enum Question: Codable, Equatable {
         case .nps(let q): return q.subtitle
         case .multipleChoice(let q): return q.subtitle
         case .shortText(let q): return q.subtitle
+        }
+    }
+
+    var imageUrl: String? {
+        switch self {
+        case .rating(let q): return q.imageUrl
+        case .nps(let q): return q.imageUrl
+        case .multipleChoice(let q): return q.imageUrl
+        case .shortText(let q): return q.imageUrl
         }
     }
 

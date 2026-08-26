@@ -57,7 +57,11 @@ final class TLSPinnedSessionDelegate: NSObject, URLSessionDelegate {
             completionHandler(.cancelAuthenticationChallenge, nil)
             return
         }
-        let chain = (SecTrustCopyCertificateChain(trust) as? [SecCertificate]) ?? []
+        // Keep the SDK's declared iOS 14 floor. `SecTrustCopyCertificateChain`
+        // starts at iOS 15, while the indexed APIs are available on iOS 12.
+        let chain = (0..<SecTrustGetCertificateCount(trust)).compactMap {
+            SecTrustGetCertificateAtIndex(trust, $0)
+        }
         for cert in chain {
             guard let pin = pinForCertificate(cert) else { continue }
             if pinSet.sha256Pins.contains(pin) {

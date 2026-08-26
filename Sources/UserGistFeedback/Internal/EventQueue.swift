@@ -5,7 +5,7 @@ import Foundation
 // Persisted shape mirrors the RN reference: `{ "version": N, "events": [...] }`.
 // Bumped every time the on-disk shape changes; older snapshots are discarded
 // rather than risk a deserialise mismatch. Events are best-effort, not durable.
-private let QUEUE_SCHEMA_VERSION: Int = 1
+private let QUEUE_SCHEMA_VERSION: Int = 2
 
 private struct PersistedQueue: Codable {
     let version: Int
@@ -66,6 +66,19 @@ final class EventQueue {
         guard count > 0 else { return }
         let n = min(count, events.count)
         events.removeFirst(n)
+        persist()
+    }
+
+    /// Removes selected events without disturbing other identities/purposes.
+    func remove(eventIds: Set<String>) {
+        guard !eventIds.isEmpty else { return }
+        events.removeAll { eventIds.contains($0.eventId) }
+        persist()
+    }
+
+    /// Removes queued work after a consent purpose is explicitly withdrawn.
+    func removePurpose(_ purpose: EventPurpose) {
+        events.removeAll { $0.purpose == purpose }
         persist()
     }
 

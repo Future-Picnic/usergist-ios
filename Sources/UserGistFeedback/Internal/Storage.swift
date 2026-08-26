@@ -18,8 +18,12 @@ final class Storage {
     let identityFile: URL
     let consentFile: URL
     let armedTriggersFile: URL
+    let armedSurveysFile: URL
+    let armedInAppMessagesFile: URL
     let frequencyCapsFile: URL
+    let userStateFile: URL
     let showHistoryFile: URL
+    let instructionStateFile: URL
 
     private let fileManager: FileManager
 
@@ -50,8 +54,12 @@ final class Storage {
         self.identityFile = root.appendingPathComponent("identity.json")
         self.consentFile = root.appendingPathComponent("consent.json")
         self.armedTriggersFile = root.appendingPathComponent("armed_triggers.json")
+        self.armedSurveysFile = root.appendingPathComponent("armed_surveys.json")
+        self.armedInAppMessagesFile = root.appendingPathComponent("armed_inapp_messages.json")
         self.frequencyCapsFile = root.appendingPathComponent("frequency_caps.json")
+        self.userStateFile = root.appendingPathComponent("user_state.json")
         self.showHistoryFile = root.appendingPathComponent("show_history.json")
+        self.instructionStateFile = root.appendingPathComponent("instruction_state.json")
     }
 
     // MARK: - Primitive I/O

@@ -1,6 +1,12 @@
 import Foundation
 import UIKit
 
+public struct SdkDiagnostic: Sendable, Equatable {
+    public let code: String
+    public let message: String
+    public let occurredAt: Date
+}
+
 /// Public entry point for the UserGist Feedback iOS SDK.
 ///
 /// A single shared instance is available as `UserGist.shared`. All public
@@ -27,16 +33,26 @@ public final class UserGist {
     /// Invoked each time a user responds to (or dismisses) a prompt.
     public var onResponse: ((PromptResponseInfo) -> Void)?
 
+    /// Optional lifecycle callbacks for SDK-rendered in-app messages.
+    public var inAppHandlers: InAppHandlers = InAppHandlers()
+
     // MARK: - Internal state
 
     private let bootstrapQueue = UserGistQueue.serial("bootstrap")
     private let lock = NSLock()
     private var runtime: Runtime?
+    private var diagnosticHandler: ((SdkDiagnostic) -> Void)?
 
     /// Push-notifications surface. Available after `initialize`; no-ops before.
     public private(set) lazy var push: UserGistPush = UserGistPush(
         registerToken: { [weak self] token in
             self?.withRuntime { rt in rt.pushRegistrar.register(token: token) }
+        },
+        invalidateToken: { [weak self] token in
+            self?.withRuntime { rt in rt.pushRegistrar.invalidate(token: token) }
+        },
+        rebindToken: { [weak self] externalId in
+            self?.withRuntime { rt in rt.pushRegistrar.rebind(externalId: externalId) }
         },
         track: { [weak self] name, props in
             self?.track(name, properties: props)
@@ -47,6 +63,20 @@ public final class UserGist {
         beacon: { [weak self] kind, deliveryId, action in
             self?.withRuntime { rt in
                 rt.pushRegistrar.beacon(kind: kind, deliveryId: deliveryId, actionButton: action)
+            }
+        },
+        silentAck: { [weak self] pingId in
+            self?.withRuntime { rt in rt.pushRegistrar.acknowledgeSilent(pingId: pingId) }
+        },
+        fetchChannels: { [weak self] completion in
+            self?.withRuntime { rt in rt.pushRegistrar.fetchChannels(completion: completion) }
+        },
+        setChannelSubscription: { [weak self] channelId, subscribed in
+            self?.withRuntime { rt in
+                rt.pushRegistrar.setChannelSubscription(
+                    channelId: channelId,
+                    subscribed: subscribed
+                )
             }
         }
     )
@@ -99,6 +129,7 @@ public final class UserGist {
                 let runtime = try Runtime(config: config)
                 self.lock.lock()
                 self.runtime = runtime
+                runtime.logger.setDiagnosticHandler(self.diagnosticHandler)
                 self.lock.unlock()
                 runtime.start()
             } catch {
@@ -110,9 +141,17 @@ public final class UserGist {
     }
 
     /// Identifies the logged-in user. Safe to call multiple times.
-    public func identify(userId: String, properties: [String: Any]? = nil) {
+    public func identify(
+        userId: String,
+        properties: [String: Any]? = nil,
+        subjectToken: String
+    ) {
         withRuntime { rt in
-            rt.identify(userId: userId, properties: properties)
+            rt.identify(
+                userId: userId,
+                properties: properties,
+                subjectToken: subjectToken
+            )
         }
     }
 
@@ -144,6 +183,11 @@ public final class UserGist {
         }
     }
 
+    /// Replaces the current in-app lifecycle callback set.
+    public func setInAppHandlers(_ handlers: InAppHandlers) {
+        inAppHandlers = handlers
+    }
+
     /// Force-flush the event queue now.
     public func flush() {
         withRuntime { rt in
@@ -157,6 +201,15 @@ public final class UserGist {
         let rt = runtime
         lock.unlock()
         rt?.setDebug(enabled)
+    }
+
+    /// Receives bounded, non-throwing SDK diagnostics in production.
+    public func setDiagnosticHandler(_ handler: ((SdkDiagnostic) -> Void)?) {
+        lock.lock()
+        diagnosticHandler = handler
+        let rt = runtime
+        lock.unlock()
+        rt?.logger.setDiagnosticHandler(handler)
     }
 
     /// Current device-local anonymous ID. Returns an empty string until
@@ -174,6 +227,11 @@ public final class UserGist {
     /// Set these before calling `openSurvey` if you want to react to lifecycle events.
     public var surveyHandlers: SurveyHandlers = SurveyHandlers()
 
+    /// Replaces the current native-survey lifecycle callback set.
+    public func setSurveyHandlers(_ handlers: SurveyHandlers) {
+        surveyHandlers = handlers
+    }
+
     /// Handlers invoked when feature-request mutations succeed (submit / vote /
     /// follow / status change). Optional — host apps that don't need these
     /// callbacks can leave them nil.
@@ -187,17 +245,29 @@ public final class UserGist {
     /// Returns the list of surveys currently offerable to this user.
     /// Requires `Consent.survey = true`. Returns an empty list otherwise.
     public func getAvailableSurveys(completion: @escaping ([SurveySummary]) -> Void) {
-        withRuntime { rt in
-            rt.getAvailableSurveys { summaries in
-                DispatchQueue.main.async {
-                    completion(summaries)
+        bootstrapQueue.async { [weak self] in
+            guard let self else {
+                DispatchQueue.main.async { completion([]) }
+                return
+            }
+            self.lock.lock()
+            let rt = self.runtime
+            self.lock.unlock()
+            guard let rt else {
+                DispatchQueue.main.async { completion([]) }
+                return
+            }
+            rt.work {
+                rt.getAvailableSurveys { summaries in
+                    DispatchQueue.main.async {
+                        completion(summaries)
+                    }
                 }
             }
         }
     }
 
-    /// Launches a specific survey by ID. Host app is responsible for rendering
-    /// the multi-step flow; the SDK provides the fetched flow via the handler.
+    /// Fetches, resumes or creates, and presents the native multi-step survey.
     public func openSurvey(_ surveyId: String, language: String? = nil) {
         withRuntime { rt in
             rt.openSurvey(surveyId: surveyId, language: language, source: "on_demand")
