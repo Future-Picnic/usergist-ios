@@ -108,4 +108,48 @@ extension AnyCodable {
         guard let dict else { return nil }
         return dict.mapValues { AnyCodable($0) }
     }
+
+    /// Event/identify property contract shared with the React Native SDK.
+    /// The ingest API accepts bounded primitive scalars, not arbitrary JSON.
+    static func wrapEventProperties(_ dict: [String: Any]?) -> [String: AnyCodable]? {
+        guard let dict else { return nil }
+        var result: [String: AnyCodable] = [:]
+        for (key, value) in dict.prefix(100) {
+            guard !key.isEmpty, key.count <= 120, !isPiiKey(key) else { continue }
+            switch value {
+            case is NSNull:
+                result[key] = AnyCodable(nil)
+            case let bool as Bool:
+                result[key] = AnyCodable(bool)
+            case let string as String:
+                result[key] = AnyCodable(String(string.prefix(10_000)))
+            case let int as Int:
+                result[key] = AnyCodable(int)
+            case let int as Int32:
+                result[key] = AnyCodable(Int(int))
+            case let int as Int64:
+                result[key] = AnyCodable(int)
+            case let float as Float where float.isFinite:
+                result[key] = AnyCodable(Double(float))
+            case let double as Double where double.isFinite:
+                result[key] = AnyCodable(double)
+            case let number as NSNumber:
+                if CFGetTypeID(number) == CFBooleanGetTypeID() {
+                    result[key] = AnyCodable(number.boolValue)
+                } else if number.doubleValue.isFinite {
+                    result[key] = AnyCodable(number.doubleValue)
+                }
+            default:
+                continue
+            }
+        }
+        return result
+    }
+
+    private static func isPiiKey(_ key: String) -> Bool {
+        let lower = key.lowercased()
+        return ["email", "phone", "ssn", "tax_id"].contains { term in
+            lower == term || lower.hasSuffix(".\(term)") || lower.hasSuffix("_\(term)")
+        }
+    }
 }

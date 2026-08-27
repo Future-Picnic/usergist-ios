@@ -9,6 +9,7 @@ import Foundation
 extension APIClient {
 
     private struct SubmitBody: Encodable {
+        let idempotencyKey: String
         let anonymousId: String
         let externalId: String?
         let title: String
@@ -28,6 +29,7 @@ extension APIClient {
     }
 
     private struct PostCommentBody: Encodable {
+        let idempotencyKey: String
         let anonymousId: String
         let externalId: String?
         let body: String
@@ -80,7 +82,13 @@ extension APIClient {
     ) {
         postJSON(
             path: SDKEndpoint.requests,
-            body: SubmitBody(anonymousId: anonymousId, externalId: externalId, title: title, description: description),
+            body: SubmitBody(
+                idempotencyKey: UUID().uuidString,
+                anonymousId: anonymousId,
+                externalId: externalId,
+                title: title,
+                description: description
+            ),
             responseType: FeatureRequest.self,
             completion: completion
         )
@@ -147,7 +155,12 @@ extension APIClient {
     ) {
         postJSON(
             path: SDKEndpoint.requestComments(requestId),
-            body: PostCommentBody(anonymousId: anonymousId, externalId: externalId, body: body),
+            body: PostCommentBody(
+                idempotencyKey: UUID().uuidString,
+                anonymousId: anonymousId,
+                externalId: externalId,
+                body: body
+            ),
             responseType: RequestComment.self,
             completion: completion
         )

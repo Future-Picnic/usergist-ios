@@ -1,12 +1,7 @@
 // Feature requests (5th pillar) — public API surface for sdk-ios.
 //
-// STATUS: API surface declared; HTTP wiring + UI presentation tracked in
-// PARITY.md as the iOS-stub for this pillar. Mirrors the React Native
-// reference 1:1 (method names adapted to Swift conventions).
-//
-// Internal client + UI screens land in a follow-up. The types here are
-// intentionally `public` so host apps can compile against the surface
-// today and the runtime fills in once the implementation lands.
+// HTTP transport, optimistic cache behavior, debounced search, and the native
+// requests board are implemented. PARITY.md tracks remaining release testing.
 
 import Foundation
 
@@ -91,12 +86,41 @@ public struct RequestFollow: Codable, Sendable, Equatable {
 public struct RequestComment: Codable, Sendable, Equatable, Identifiable {
     public let id: String
     public let requestId: String
-    public let authorAnonymousId: String?
-    public let authorRole: String?
     public let body: String
+    public let authorAnonymousId: String
+    public let authorExternalId: String?
+    public let viewerIsAuthor: Bool
     public let createdAt: String
     public let updatedAt: String
-    public let isFromTeam: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case requestId
+        case body
+        case authorAnonymousId
+        case authorExternalId
+        case viewerIsAuthor
+        case createdAt
+        case updatedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        requestId = try values.decode(String.self, forKey: .requestId)
+        body = try values.decode(String.self, forKey: .body)
+        authorAnonymousId = try values.decodeIfPresent(
+            String.self,
+            forKey: .authorAnonymousId
+        ) ?? ""
+        authorExternalId = try values.decodeIfPresent(
+            String.self,
+            forKey: .authorExternalId
+        )
+        viewerIsAuthor = try values.decode(Bool.self, forKey: .viewerIsAuthor)
+        createdAt = try values.decode(String.self, forKey: .createdAt)
+        updatedAt = try values.decode(String.self, forKey: .updatedAt)
+    }
 }
 
 public struct GetRequestsOptions: Sendable {

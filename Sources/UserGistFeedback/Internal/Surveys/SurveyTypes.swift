@@ -15,8 +15,8 @@ public enum SurveyQuestionKind: String, Codable, Sendable {
     case longText = "long_text"
     case likert
     case ranking
-    case date
-    case info
+    case singleDate = "single_date"
+    case infoScreen = "info_screen"
 }
 
 public struct SurveyChoice: Codable, Sendable, Equatable {
@@ -28,6 +28,7 @@ public struct SurveyChoice: Codable, Sendable, Equatable {
 /// strings, string arrays) so we wrap them in an enum that round-trips
 /// through JSONDecoder.
 public enum SurveyAnswerValue: Codable, Sendable, Equatable {
+    case null
     case bool(Bool)
     case int(Int)
     case double(Double)
@@ -37,6 +38,7 @@ public enum SurveyAnswerValue: Codable, Sendable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
+        if c.decodeNil() { self = .null; return }
         if let v = try? c.decode(Bool.self) { self = .bool(v); return }
         if let v = try? c.decode(Int.self) { self = .int(v); return }
         if let v = try? c.decode(Double.self) { self = .double(v); return }
@@ -55,6 +57,7 @@ public enum SurveyAnswerValue: Codable, Sendable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var c = encoder.singleValueContainer()
         switch self {
+        case .null: try c.encodeNil()
         case .bool(let v): try c.encode(v)
         case .int(let v): try c.encode(v)
         case .double(let v): try c.encode(v)
@@ -68,6 +71,7 @@ public enum SurveyAnswerValue: Codable, Sendable, Equatable {
     /// "empty answer" semantics used by the RN branch evaluator.
     public var isAnswered: Bool {
         switch self {
+        case .null: return false
         case .string(let v): return !v.isEmpty
         case .stringArray(let v): return !v.isEmpty
         case .intArray(let v): return !v.isEmpty
@@ -78,16 +82,26 @@ public enum SurveyAnswerValue: Codable, Sendable, Equatable {
 
 public struct SurveyQuestion: Codable, Sendable, Equatable, Identifiable {
     public let id: String
-    public let kind: SurveyQuestionKind
-    public let text: String
+    public let type: SurveyQuestionKind
+    public let title: String
+    public let subtitle: String?
     public let required: Bool?
-    public let helperText: String?
-    public let choices: [SurveyChoice]?
-    public let minRating: Int?
-    public let maxRating: Int?
-    public let minLabel: String?
-    public let maxLabel: String?
+    public let imageUrl: String?
+    public let options: [SurveyChoice]?
+    public let allowOther: Bool?
+    public let minSelections: Int?
+    public let maxSelections: Int?
+    public let scale: Int?
+    public let style: String?
+    public let lowLabel: String?
+    public let highLabel: String?
+    public let labels: [String]?
     public let placeholder: String?
+    public let maxLength: Int?
+    public let items: [SurveyChoice]?
+    public let minDate: String?
+    public let maxDate: String?
+    public let body: String?
 }
 
 public enum SurveyBranchOp: String, Codable, Sendable {
@@ -110,8 +124,61 @@ public struct SurveyBranch: Codable, Sendable, Equatable {
 
 public let SURVEY_END_SENTINEL = "__end__"
 
+public struct SurveyEndCta: Codable, Sendable, Equatable {
+    public let kind: String
+    public let label: String
+    public let target: String?
+}
+
+public struct SurveyFollowUp: Codable, Sendable, Equatable {
+    public let headline: String
+    public let body: String?
+    public let cta: SurveyEndCta?
+}
+
+public struct SurveyEndScreen: Codable, Sendable, Equatable {
+    public let headline: String
+    public let body: String?
+    public let cta: SurveyEndCta?
+    public let followUp: SurveyFollowUp?
+}
+
 public struct SurveyFlow: Codable, Sendable, Equatable {
     public let startQuestionId: String
     public let questions: [SurveyQuestion]
     public let branches: [SurveyBranch]
+    public let progressStyle: String
+    public let backNavigation: Bool
+    public let endScreen: SurveyEndScreen?
+}
+
+struct SurveyCampaignWithFlow: Codable {
+    let id: String
+    let name: String
+    let flow: SurveyFlow
+    let endScreen: SurveyEndScreen?
+    let theme: PromptTheme?
+}
+
+struct SurveyFrequencyCap: Codable, Equatable {
+    let perCampaignDays: Int?
+    let perPillarDays: Int?
+    let perGlobalDays: Int?
+    let maxPerUser: Int?
+}
+
+struct ArmedSurvey: Codable {
+    let campaignId: String
+    let eventName: String
+    let segmentRules: SerializedSegmentRules?
+    let clientSideEligible: Bool?
+    let cooldownSeconds: Int?
+    let frequencyCap: SurveyFrequencyCap
+    let survey: SurveyCampaignWithFlow
+}
+
+struct ArmedSurveysResponse: Codable {
+    let surveys: [ArmedSurvey]
+    let serverTime: String?
+    let nextSyncMs: Int?
 }

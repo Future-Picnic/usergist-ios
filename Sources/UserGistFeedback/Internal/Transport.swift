@@ -57,24 +57,28 @@ final class Transport {
 
     func flushIfNeeded() {
         guard !isFlushing else { return }
-        guard let consent, consent.allowsTransport else {
-            logger.debug("flush skipped: consent not granted")
-            return
-        }
+        guard let consent else { return }
+        let currentConsent = consent.current()
+        guard currentConsent.analytics == true || currentConsent.feedback == true else { return }
         guard let eventQueue, !eventQueue.isEmpty else { return }
-        guard let identity else { return }
-
-        let batch = eventQueue.head(size: config.flushBatchSize)
+        let allowed = eventQueue.snapshot().filter { event in
+            event.purpose == .analytics
+                ? currentConsent.analytics == true
+                : currentConsent.feedback == true
+        }
+        guard let first = allowed.first else { return }
+        let batch = Array(allowed.filter {
+            $0.anonymousId == first.anonymousId && $0.externalId == first.externalId
+        }.prefix(config.flushBatchSize))
         guard !batch.isEmpty else { return }
 
         isFlushing = true
-        let identitySnap = identity.current()
         let context = IngestContext.current(
-            anonymousId: identitySnap.anonymousId,
-            externalId: identitySnap.externalId,
+            anonymousId: first.anonymousId,
+            externalId: first.externalId,
             sdkVersion: config.sdkVersion
         )
-        let payload = IngestPayload(events: batch, context: context)
+        let payload = IngestPayload(events: batch.map(WireIngestEvent.init), context: context)
         logger.debug("flushing \(batch.count) events")
 
         apiClient.postJSON(
@@ -87,14 +91,50 @@ final class Transport {
                 self.isFlushing = false
                 switch result {
                 case .success:
-                    self.eventQueue?.drop(batch.count)
+                    self.eventQueue?.remove(eventIds: Set(batch.map(\.eventId)))
                     self.logger.debug("flushed \(batch.count) events")
                     // If there's more left, schedule another pass on the queue.
                     if let q = self.eventQueue, !q.isEmpty {
                         self.queue.async { self.flushIfNeeded() }
                     }
                 case .failure(let err):
-                    self.logger.warn("flush failed: \(err)")
+                    if case .server(let status, _) = err,
+                       (400..<500).contains(status), status != 429 {
+                        if batch.count == 1 {
+                            self.eventQueue?.remove(eventIds: [first.eventId])
+                            self.logger.warn("quarantined permanently rejected event \(first.eventId)")
+                            self.queue.async { self.flushIfNeeded() }
+                        } else {
+                            self.flushSingleForIsolation(first, context: context)
+                        }
+                    } else {
+                        self.logger.warn("flush failed: \(err)")
+                    }
+                }
+            }
+        }
+    }
+
+    private func flushSingleForIsolation(_ event: IngestEvent, context: IngestContext) {
+        let payload = IngestPayload(events: [WireIngestEvent(event)], context: context)
+        apiClient.postJSON(
+            path: SDKEndpoint.ingest,
+            body: payload,
+            responseType: IngestResponse.self
+        ) { [weak self] result in
+            guard let self else { return }
+            self.queue.async {
+                switch result {
+                case .success:
+                    self.eventQueue?.remove(eventIds: [event.eventId])
+                    self.flushIfNeeded()
+                case .failure(.server(let status, _))
+                    where (400..<500).contains(status) && status != 429:
+                    self.eventQueue?.remove(eventIds: [event.eventId])
+                    self.logger.warn("quarantined permanently rejected event \(event.eventId)")
+                    self.flushIfNeeded()
+                case .failure(let error):
+                    self.logger.warn("single-event isolation failed: \(error)")
                 }
             }
         }
@@ -103,12 +143,20 @@ final class Transport {
     // MARK: - Consent
 
     func sendConsent(_ consent: Consent) {
-        guard let identity else { return }
+        guard let identity, let consentStore = self.consent else { return }
         let snap = identity.current()
+        let current = consentStore.current()
         let payload = ConsentPayload(
             anonymousId: snap.anonymousId,
             externalId: snap.externalId,
-            purposes: consent
+            purposes: Consent(
+                analytics: current.analytics ?? false,
+                feedback: current.feedback ?? false,
+                push: current.push ?? false,
+                survey: current.survey ?? false
+            ),
+            version: consentStore.version,
+            effectiveAt: consentStore.updatedAt
         )
         apiClient.postVoid(path: SDKEndpoint.consent, body: payload) { [weak self] result in
             if case .failure(let err) = result {
@@ -125,7 +173,7 @@ final class Transport {
         let payload = IdentifyPayload(
             anonymousId: snap.anonymousId,
             externalId: userId,
-            properties: AnyCodable.wrap(properties)
+            properties: AnyCodable.wrapEventProperties(properties)
         )
         apiClient.postVoid(path: SDKEndpoint.identify, body: payload) { [weak self] result in
             if case .failure(let err) = result {
@@ -167,8 +215,34 @@ final class Transport {
 // MARK: - Wire payloads
 
 struct IngestPayload: Encodable {
-    let events: [IngestEvent]
+    let events: [WireIngestEvent]
     let context: IngestContext
+}
+
+struct WireIngestEvent: Encodable {
+    let eventId: String
+    let name: String
+    let timestamp: Date
+    let anonymousId: String
+    let externalId: String?
+    let properties: [String: AnyCodable]?
+    let sessionId: String?
+    let sdkVersion: String
+    let appVersion: String?
+    let platform: String
+
+    init(_ event: IngestEvent) {
+        eventId = event.eventId
+        name = event.name
+        timestamp = event.timestamp
+        anonymousId = event.anonymousId
+        externalId = event.externalId
+        properties = event.properties
+        sessionId = event.sessionId
+        sdkVersion = event.sdkVersion
+        appVersion = event.appVersion
+        platform = event.platform
+    }
 }
 
 struct IngestResponse: Decodable {
@@ -180,6 +254,8 @@ struct ConsentPayload: Encodable {
     let anonymousId: String
     let externalId: String?
     let purposes: Consent
+    let version: Int
+    let effectiveAt: Date
 }
 
 struct IdentifyPayload: Encodable {
@@ -188,7 +264,8 @@ struct IdentifyPayload: Encodable {
     let properties: [String: AnyCodable]?
 }
 
-struct SubmitResponsePayload: Encodable {
+struct SubmitResponsePayload: Codable {
+    let idempotencyKey: String
     let promptId: String
     let anonymousId: String
     let externalId: String?
@@ -197,12 +274,12 @@ struct SubmitResponsePayload: Encodable {
     let latencyMs: Int?
 }
 
-struct ResponseAnswerWire: Encodable {
+struct ResponseAnswerWire: Codable {
     let questionId: String
     let value: AnswerValueWire
 }
 
-enum AnswerValueWire: Encodable {
+enum AnswerValueWire: Codable {
     case number(Double)
     case string(String)
     case list([String])
@@ -215,6 +292,20 @@ enum AnswerValueWire: Encodable {
         case .string(let v): try c.encode(v)
         case .list(let v): try c.encode(v)
         case .null: try c.encodeNil()
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if c.decodeNil() { self = .null }
+        else if let value = try? c.decode(Double.self) { self = .number(value) }
+        else if let value = try? c.decode(String.self) { self = .string(value) }
+        else if let value = try? c.decode([String].self) { self = .list(value) }
+        else {
+            throw DecodingError.dataCorruptedError(
+                in: c,
+                debugDescription: "Unsupported feedback answer value"
+            )
         }
     }
 }

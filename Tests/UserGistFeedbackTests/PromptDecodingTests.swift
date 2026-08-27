@@ -25,7 +25,9 @@ final class PromptDecodingTests: XCTestCase {
                 "id": "q1",
                 "title": "How was checkout?",
                 "subtitle": "Be honest.",
+                "imageUrl": "https://example.com/rating.png",
                 "scale": 5,
+                "display": "stars",
                 "lowLabel": "Bad",
                 "highLabel": "Great"
               }
@@ -40,7 +42,7 @@ final class PromptDecodingTests: XCTestCase {
           "prompt": {
             "id": "p_nps",
             "questions": [
-              { "type": "nps", "id": "qnps", "title": "Would you recommend us?", "followUp": "Why?" }
+              { "type": "nps", "id": "qnps", "title": "Would you recommend us?", "followUp": "Why?", "lowLabel": "Never", "highLabel": "Absolutely" }
             ]
           }
         },
@@ -98,13 +100,17 @@ final class PromptDecodingTests: XCTestCase {
             XCTFail("expected rating"); return
         }
         XCTAssertEqual(r.scale, 5)
+        XCTAssertEqual(r.display, .stars)
         XCTAssertEqual(r.lowLabel, "Bad")
+        XCTAssertEqual(r.imageUrl, "https://example.com/rating.png")
 
         // NPS
         guard case .nps(let nps) = decoded.triggers[1].prompt.questions[0] else {
             XCTFail("expected nps"); return
         }
         XCTAssertEqual(nps.followUp, "Why?")
+        XCTAssertEqual(nps.lowLabel, "Never")
+        XCTAssertEqual(nps.highLabel, "Absolutely")
 
         // Multiple choice
         guard case .multipleChoice(let mc) = decoded.triggers[2].prompt.questions[0] else {

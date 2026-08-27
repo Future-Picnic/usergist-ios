@@ -13,6 +13,27 @@ final class UserGistLogger: @unchecked Sendable {
     private let osLogger: OSLog
     private var debugEnabled: Bool
     private let lock = NSLock()
+    private var diagnosticHandler: ((SdkDiagnostic) -> Void)?
+
+    func setDiagnosticHandler(_ handler: ((SdkDiagnostic) -> Void)?) {
+        lock.lock()
+        diagnosticHandler = handler
+        lock.unlock()
+    }
+
+    private func emitDiagnostic(_ message: String) {
+        lock.lock()
+        let handler = diagnosticHandler
+        lock.unlock()
+        guard let handler else { return }
+        do {
+            handler(SdkDiagnostic(
+                code: "sdk_error",
+                message: String(message.prefix(200)),
+                occurredAt: Date()
+            ))
+        }
+    }
 
     init(subsystem: String = "studio.usergist.feedback", category: String = "sdk", debug: Bool) {
         self.osLogger = OSLog(subsystem: subsystem, category: category)
@@ -41,14 +62,18 @@ final class UserGistLogger: @unchecked Sendable {
     }
 
     func warn(_ message: @autoclosure () -> String) {
-        os_log("%{public}@", log: osLogger, type: .default, "WARN: \(message())")
+        let resolved = message()
+        emitDiagnostic(resolved)
+        os_log("%{public}@", log: osLogger, type: .default, "WARN: \(resolved)")
     }
 
     func error(_ message: @autoclosure () -> String, error: Error? = nil) {
+        let resolved = message()
+        emitDiagnostic(resolved)
         if let error {
-            os_log("%{public}@", log: osLogger, type: .error, "\(message()) — \(error)")
+            os_log("%{public}@", log: osLogger, type: .error, "\(resolved) — \(error)")
         } else {
-            os_log("%{public}@", log: osLogger, type: .error, "\(message())")
+            os_log("%{public}@", log: osLogger, type: .error, resolved)
         }
     }
 

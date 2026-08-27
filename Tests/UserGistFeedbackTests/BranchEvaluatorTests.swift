@@ -7,28 +7,45 @@ import XCTest
 // platform.
 final class BranchEvaluatorTests: XCTestCase {
 
+    private func makeQuestion(
+        id: String,
+        type: SurveyQuestionKind,
+        title: String,
+        required: Bool? = nil,
+        scale: Int? = nil
+    ) -> SurveyQuestion {
+        SurveyQuestion(
+            id: id,
+            type: type,
+            title: title,
+            subtitle: nil,
+            required: required,
+            imageUrl: nil,
+            options: nil,
+            allowOther: nil,
+            minSelections: nil,
+            maxSelections: nil,
+            scale: scale,
+            style: nil,
+            lowLabel: nil,
+            highLabel: nil,
+            labels: nil,
+            placeholder: nil,
+            maxLength: nil,
+            items: nil,
+            minDate: nil,
+            maxDate: nil,
+            body: nil
+        )
+    }
+
     private func makeFlow() -> SurveyFlow {
         SurveyFlow(
             startQuestionId: "q1",
             questions: [
-                SurveyQuestion(
-                    id: "q1", kind: .rating, text: "rate", required: true,
-                    helperText: nil, choices: nil,
-                    minRating: 1, maxRating: 5,
-                    minLabel: nil, maxLabel: nil, placeholder: nil
-                ),
-                SurveyQuestion(
-                    id: "q2", kind: .shortText, text: "why?", required: false,
-                    helperText: nil, choices: nil,
-                    minRating: nil, maxRating: nil,
-                    minLabel: nil, maxLabel: nil, placeholder: nil
-                ),
-                SurveyQuestion(
-                    id: "q3", kind: .shortText, text: "what would help?", required: false,
-                    helperText: nil, choices: nil,
-                    minRating: nil, maxRating: nil,
-                    minLabel: nil, maxLabel: nil, placeholder: nil
-                ),
+                makeQuestion(id: "q1", type: .rating, title: "rate", required: true, scale: 5),
+                makeQuestion(id: "q2", type: .shortText, title: "why?", required: false),
+                makeQuestion(id: "q3", type: .shortText, title: "what would help?", required: false),
             ],
             branches: [
                 SurveyBranch(
@@ -36,7 +53,10 @@ final class BranchEvaluatorTests: XCTestCase {
                     condition: SurveyBranchCondition(op: .lte, value: .int(2)),
                     toQuestionId: "q3"
                 ),
-            ]
+            ],
+            progressStyle: "bar",
+            backNavigation: true,
+            endScreen: nil
         )
     }
 
@@ -64,12 +84,7 @@ final class BranchEvaluatorTests: XCTestCase {
         let flow = SurveyFlow(
             startQuestionId: "q1",
             questions: [
-                SurveyQuestion(
-                    id: "q1", kind: .rating, text: "x", required: nil,
-                    helperText: nil, choices: nil,
-                    minRating: nil, maxRating: nil,
-                    minLabel: nil, maxLabel: nil, placeholder: nil
-                ),
+                makeQuestion(id: "q1", type: .rating, title: "x"),
             ],
             branches: [
                 SurveyBranch(
@@ -77,7 +92,10 @@ final class BranchEvaluatorTests: XCTestCase {
                     condition: SurveyBranchCondition(op: .answered, value: nil),
                     toQuestionId: SURVEY_END_SENTINEL
                 ),
-            ]
+            ],
+            progressStyle: "bar",
+            backNavigation: true,
+            endScreen: nil
         )
         let next = BranchEvaluator.nextQuestionId(
             flow: flow,

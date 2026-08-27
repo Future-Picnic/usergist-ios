@@ -8,6 +8,7 @@ final class PushRegistrar {
     private let consent: ConsentStore
     private let logger: UserGistLogger
     private let queue: DispatchQueue
+    private let environment: String
 
     private var lastRegistered: String?
 
@@ -16,13 +17,15 @@ final class PushRegistrar {
         identity: IdentityStore,
         consent: ConsentStore,
         logger: UserGistLogger,
-        queue: DispatchQueue
+        queue: DispatchQueue,
+        environment: String
     ) {
         self.apiClient = apiClient
         self.identity = identity
         self.consent = consent
         self.logger = logger
         self.queue = queue
+        self.environment = environment
     }
 
     func register(token: String) {
@@ -40,7 +43,7 @@ final class PushRegistrar {
                 externalId: snap.externalId,
                 token: token,
                 platform: "ios",
-                environment: PushRegistrar.environmentFlag(),
+                environment: self.environment,
                 language: Locale.current.identifier,
                 timezone: TimeZone.current.identifier,
                 appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
@@ -68,7 +71,11 @@ final class PushRegistrar {
                 anonymousId: snap.anonymousId,
                 token: token
             )
-            self.apiClient.postVoid(path: SDKEndpoint.pushInvalidateToken, body: payload) { _ in }
+            self.apiClient.postVoid(path: SDKEndpoint.pushInvalidateToken, body: payload) { [weak self] result in
+                if case .success = result, self?.lastRegistered == token {
+                    self?.lastRegistered = nil
+                }
+            }
         }
     }
 
@@ -92,6 +99,10 @@ final class PushRegistrar {
     func reportAppOpen() {
         queue.async { [weak self] in
             guard let self else { return }
+            guard self.lastRegistered != nil else {
+                self.logger.debug("push app-open skipped: no registered token")
+                return
+            }
             let snap = self.identity.current()
             let payload = AppOpenPayload(
                 anonymousId: snap.anonymousId,
@@ -124,13 +135,56 @@ final class PushRegistrar {
         }
     }
 
-    private static func environmentFlag() -> String {
-        #if DEBUG
-        return "sandbox"
-        #else
-        return "production"
-        #endif
+    func acknowledgeSilent(pingId: String) {
+        guard !pingId.isEmpty else { return }
+        queue.async { [weak self] in
+            guard let self else { return }
+            let payload = SilentAckPayload(
+                pingId: pingId,
+                anonymousId: self.identity.current().anonymousId,
+                receivedAt: ISO8601DateFormatter().string(from: Date())
+            )
+            self.apiClient.postVoid(path: SDKEndpoint.pushSilentAck, body: payload) { _ in }
+        }
     }
+
+    func fetchChannels(completion: @escaping ([UserGistPushChannel]) -> Void) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.apiClient.get(
+                path: SDKEndpoint.pushChannels,
+                responseType: PushChannelsEnvelope.self
+            ) { result in
+                switch result {
+                case .success(let envelope): completion(envelope.channels)
+                case .failure(let error):
+                    self.logger.warn("push channel fetch failed: \(error)")
+                    completion([])
+                }
+            }
+        }
+    }
+
+    func setChannelSubscription(channelId: String, subscribed: Bool) {
+        guard !channelId.isEmpty else { return }
+        queue.async { [weak self] in
+            guard let self else { return }
+            let payload = ChannelSubscriptionPayload(
+                anonymousId: self.identity.current().anonymousId,
+                channelId: channelId,
+                subscribed: subscribed
+            )
+            self.apiClient.postVoid(
+                path: SDKEndpoint.pushChannelSubscription,
+                body: payload
+            ) { _ in }
+        }
+    }
+
+    func reset() {
+        queue.async { [weak self] in self?.lastRegistered = nil }
+    }
+
 }
 
 private struct RegisterTokenPayload: Encodable {
@@ -166,6 +220,22 @@ private struct BeaconPayload: Encodable {
     let deliveryId: String
     let occurredAt: String
     let actionButton: String?
+}
+
+private struct SilentAckPayload: Encodable {
+    let pingId: String
+    let anonymousId: String
+    let receivedAt: String
+}
+
+private struct PushChannelsEnvelope: Decodable {
+    let channels: [UserGistPushChannel]
+}
+
+private struct ChannelSubscriptionPayload: Encodable {
+    let anonymousId: String
+    let channelId: String
+    let subscribed: Bool
 }
 
 enum PushBeaconKind {

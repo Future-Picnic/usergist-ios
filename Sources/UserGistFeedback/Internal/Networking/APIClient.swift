@@ -14,6 +14,7 @@ final class APIClient {
         case decoding(Error)
         case cancelled
         case maxAttemptsExceeded
+        case subjectUnavailable
     }
 
     private let session: URLSession
@@ -23,6 +24,9 @@ final class APIClient {
     private let sdkVersion: String
     private let retryPolicy: RetryPolicy
     private let callbackQueue: DispatchQueue
+    private let credentialLock = NSLock()
+    private var subjectToken: String?
+    private var credentialWaiters: [UUID: () -> Void] = [:]
 
     init(
         baseURL: URL,
@@ -42,15 +46,20 @@ final class APIClient {
         self.callbackQueue = callbackQueue
         if let session = session {
             self.session = session
-        } else if tlsPinSets.contains(where: { !$0.sha256Pins.isEmpty }) {
-            let delegate = TLSPinnedSessionDelegate(pinSets: tlsPinSets, logger: logger)
-            self.session = URLSession(
-                configuration: .default,
-                delegate: delegate,
-                delegateQueue: nil
-            )
         } else {
-            self.session = .shared
+            let configuration = URLSessionConfiguration.default
+            configuration.timeoutIntervalForRequest = 15
+            configuration.timeoutIntervalForResource = 30
+            if tlsPinSets.contains(where: { !$0.sha256Pins.isEmpty }) {
+                let delegate = TLSPinnedSessionDelegate(pinSets: tlsPinSets, logger: logger)
+                self.session = URLSession(
+                    configuration: configuration,
+                    delegate: delegate,
+                    delegateQueue: nil
+                )
+            } else {
+                self.session = URLSession(configuration: configuration)
+            }
         }
     }
 
@@ -60,7 +69,9 @@ final class APIClient {
         method: String,
         path: String,
         query: [URLQueryItem]? = nil,
-        body: Data? = nil
+        body: Data? = nil,
+        requiresSubject: Bool = true,
+        subjectTokenOverride: String? = nil
     ) -> URLRequest? {
         guard var comp = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false) else {
             return nil
@@ -77,6 +88,14 @@ final class APIClient {
         req.setValue("UserGistFeedback-iOS/\(sdkVersion)", forHTTPHeaderField: "User-Agent")
         req.setValue(sdkVersion, forHTTPHeaderField: "X-UserGist-SDK-Version")
         req.setValue("ios", forHTTPHeaderField: "X-UserGist-Platform")
+        credentialLock.lock()
+        let sharedToken = subjectToken
+        credentialLock.unlock()
+        let token = subjectTokenOverride ?? sharedToken
+        if requiresSubject && token == nil { return nil }
+        if let token {
+            req.setValue(token, forHTTPHeaderField: "X-UserGist-Subject-Token")
+        }
         if let body {
             req.httpBody = body
         }
@@ -85,11 +104,56 @@ final class APIClient {
 
     // MARK: - Public methods
 
+    /// Installs the server-minted credential that binds SDK calls to an
+    /// anonymous installation or identified subject.
+    func setSubjectToken(_ token: String?) {
+        credentialLock.lock()
+        subjectToken = token?.hasPrefix("st_") == true ? token : nil
+        let waiters = subjectToken == nil ? [] : Array(credentialWaiters.values)
+        if subjectToken != nil { credentialWaiters.removeAll() }
+        credentialLock.unlock()
+        for waiter in waiters { callbackQueue.async(execute: waiter) }
+    }
+
+    func cancelAll() {
+        session.getAllTasks { tasks in tasks.forEach { $0.cancel() } }
+    }
+
+    private func whenSubjectReady(
+        required: Bool,
+        onTimeout: @escaping () -> Void,
+        perform: @escaping () -> Void
+    ) {
+        guard required else {
+            perform()
+            return
+        }
+        credentialLock.lock()
+        if subjectToken != nil {
+            credentialLock.unlock()
+            perform()
+            return
+        }
+        let id = UUID()
+        credentialWaiters[id] = perform
+        credentialLock.unlock()
+        callbackQueue.asyncAfter(deadline: .now() + 15) { [weak self] in
+            guard let self else { return }
+            self.credentialLock.lock()
+            let pending = self.credentialWaiters.removeValue(forKey: id) != nil
+            self.credentialLock.unlock()
+            if pending { onTimeout() }
+        }
+    }
+
     /// Sends a POST request with a JSON body and returns the decoded response.
     func postJSON<Request: Encodable, Response: Decodable>(
         path: String,
         body: Request,
         responseType: Response.Type,
+        requiresSubject: Bool = true,
+        idempotent: Bool = true,
+        subjectTokenOverride: String? = nil,
         completion: @escaping (Result<Response, APIError>) -> Void
     ) {
         let data: Data
@@ -99,20 +163,45 @@ final class APIClient {
             callbackQueue.async { completion(.failure(.transport(error))) }
             return
         }
-        guard let request = buildRequest(method: "POST", path: path, body: data) else {
-            callbackQueue.async { completion(.failure(.invalidURL)) }
-            return
+        whenSubjectReady(
+            required: requiresSubject && subjectTokenOverride == nil,
+            onTimeout: { completion(.failure(.subjectUnavailable)) }
+        ) { [weak self] in
+            guard let self,
+                  let request = self.buildRequest(
+                    method: "POST",
+                    path: path,
+                    body: data,
+                    requiresSubject: requiresSubject,
+                    subjectTokenOverride: subjectTokenOverride
+                  ) else {
+                completion(.failure(.invalidURL))
+                return
+            }
+            self.performWithRetry(
+                request: request,
+                attempt: 0,
+                allowRetry: idempotent,
+                completion: completion
+            )
         }
-        performWithRetry(request: request, attempt: 0, completion: completion)
     }
 
     /// POST returning only success/failure (no response body expected).
     func postVoid<Request: Encodable>(
         path: String,
         body: Request,
+        requiresSubject: Bool = true,
+        subjectTokenOverride: String? = nil,
         completion: @escaping (Result<Void, APIError>) -> Void
     ) {
-        postJSON(path: path, body: body, responseType: EmptyResponse.self) { result in
+        postJSON(
+            path: path,
+            body: body,
+            responseType: EmptyResponse.self,
+            requiresSubject: requiresSubject,
+            subjectTokenOverride: subjectTokenOverride
+        ) { result in
             switch result {
             case .success: completion(.success(()))
             case .failure(let err): completion(.failure(err))
@@ -125,13 +214,26 @@ final class APIClient {
         path: String,
         query: [URLQueryItem] = [],
         responseType: Response.Type,
+        requiresSubject: Bool = true,
         completion: @escaping (Result<Response, APIError>) -> Void
     ) {
-        guard let request = buildRequest(method: "GET", path: path, query: query, body: nil) else {
-            callbackQueue.async { completion(.failure(.invalidURL)) }
-            return
+        whenSubjectReady(
+            required: requiresSubject,
+            onTimeout: { completion(.failure(.subjectUnavailable)) }
+        ) { [weak self] in
+            guard let self,
+                  let request = self.buildRequest(
+                    method: "GET",
+                    path: path,
+                    query: query,
+                    body: nil,
+                    requiresSubject: requiresSubject
+                  ) else {
+                completion(.failure(.invalidURL))
+                return
+            }
+            self.performWithRetry(request: request, attempt: 0, completion: completion)
         }
-        performWithRetry(request: request, attempt: 0, completion: completion)
     }
 
     /// PATCH with JSON body + decoded response.
@@ -139,6 +241,7 @@ final class APIClient {
         path: String,
         body: Request,
         responseType: Response.Type,
+        requiresSubject: Bool = true,
         completion: @escaping (Result<Response, APIError>) -> Void
     ) {
         let data: Data
@@ -148,11 +251,22 @@ final class APIClient {
             callbackQueue.async { completion(.failure(.transport(error))) }
             return
         }
-        guard let request = buildRequest(method: "PATCH", path: path, body: data) else {
-            callbackQueue.async { completion(.failure(.invalidURL)) }
-            return
+        whenSubjectReady(
+            required: requiresSubject,
+            onTimeout: { completion(.failure(.subjectUnavailable)) }
+        ) { [weak self] in
+            guard let self,
+                  let request = self.buildRequest(
+                    method: "PATCH",
+                    path: path,
+                    body: data,
+                    requiresSubject: requiresSubject
+                  ) else {
+                completion(.failure(.invalidURL))
+                return
+            }
+            self.performWithRetry(request: request, attempt: 0, completion: completion)
         }
-        performWithRetry(request: request, attempt: 0, completion: completion)
     }
 
     /// DELETE returning only success/failure. Accepts optional query params
@@ -160,16 +274,30 @@ final class APIClient {
     func deleteVoid(
         path: String,
         query: [URLQueryItem] = [],
+        requiresSubject: Bool = true,
         completion: @escaping (Result<Void, APIError>) -> Void
     ) {
-        guard let request = buildRequest(method: "DELETE", path: path, query: query, body: nil) else {
-            callbackQueue.async { completion(.failure(.invalidURL)) }
-            return
-        }
-        performWithRetry(request: request, attempt: 0) { (result: Result<EmptyResponse, APIError>) in
-            switch result {
-            case .success: completion(.success(()))
-            case .failure(let err): completion(.failure(err))
+        whenSubjectReady(
+            required: requiresSubject,
+            onTimeout: { completion(.failure(.subjectUnavailable)) }
+        ) { [weak self] in
+            guard let self,
+                  let request = self.buildRequest(
+                    method: "DELETE",
+                    path: path,
+                    query: query,
+                    body: nil,
+                    requiresSubject: requiresSubject
+                  ) else {
+                completion(.failure(.invalidURL))
+                return
+            }
+            self.performWithRetry(request: request, attempt: 0) {
+                (result: Result<EmptyResponse, APIError>) in
+                switch result {
+                case .success: completion(.success(()))
+                case .failure(let err): completion(.failure(err))
+                }
             }
         }
     }
@@ -207,34 +335,106 @@ final class APIClient {
         let externalId: String?
     }
 
-    private struct ResolveSurveyLinkResponse: Decodable {
+    struct ResolveSurveyLinkResponse: Decodable {
         let surveyId: String
         let name: String?
+        let consentRequired: Bool
+        let openAccess: Bool
     }
 
-    private struct SurveyFlowEnvelope: Decodable {
-        let flow: SurveyFlow
+    struct SurveyAttemptSession: Decodable {
+        let attemptId: String
+        let startQuestionId: String
+        let progressSnapshot: [String: SurveyAnswerValue]
+        let currentQuestionId: String?
+        let resumed: Bool
+    }
+
+    private struct CreateSurveyAttemptBody: Encodable {
+        let anonymousId: String
+        let externalId: String?
+        let source: String
+        let language: String?
+        let resume: Bool
+        let sdkVersion: String
+        let appVersion: String?
+        let platform: String
+    }
+
+    private struct SurveyProgressBody: Encodable {
+        let currentQuestionId: String?
+        let progressSnapshot: [String: SurveyAnswerValue]
     }
 
     /// Fetch the full flow definition for `surveyId`. Used by the native
     /// renderer to drive question-by-question presentation.
-    func getSurveyFlow(
+    func getSurvey(
         surveyId: String,
+        anonymousId: String,
+        externalId: String?,
         language: String?,
-        completion: @escaping (Result<SurveyFlow, APIError>) -> Void
+        completion: @escaping (Result<SurveyCampaignWithFlow, APIError>) -> Void
     ) {
-        var query: [URLQueryItem] = []
+        var query: [URLQueryItem] = [URLQueryItem(name: "anonymousId", value: anonymousId)]
+        if let externalId, !externalId.isEmpty {
+            query.append(URLQueryItem(name: "externalId", value: externalId))
+        }
         if let language, !language.isEmpty {
             query.append(URLQueryItem(name: "language", value: language))
         }
         get(
-            path: SDKEndpoint.surveyFlow(surveyId),
+            path: SDKEndpoint.survey(surveyId),
             query: query,
-            responseType: SurveyFlowEnvelope.self
+            responseType: SurveyCampaignWithFlow.self,
+            completion: completion
+        )
+    }
+
+    /// Creates or resumes the server-authoritative attempt. Attempt ids must
+    /// always originate here so progress and completion pass ownership checks.
+    func createSurveyAttempt(
+        surveyId: String,
+        anonymousId: String,
+        externalId: String?,
+        source: String,
+        language: String?,
+        appVersion: String?,
+        completion: @escaping (Result<SurveyAttemptSession, APIError>) -> Void
+    ) {
+        postJSON(
+            path: SDKEndpoint.surveyAttempts(surveyId),
+            body: CreateSurveyAttemptBody(
+                anonymousId: anonymousId,
+                externalId: externalId,
+                source: source,
+                language: language,
+                resume: true,
+                sdkVersion: sdkVersion,
+                appVersion: appVersion,
+                platform: "ios"
+            ),
+            responseType: SurveyAttemptSession.self,
+            completion: completion
+        )
+    }
+
+    func updateSurveyProgress(
+        attemptId: String,
+        currentQuestionId: String?,
+        snapshot: [String: SurveyAnswerValue],
+        completion: @escaping (Result<Void, APIError>) -> Void
+    ) {
+        patchJSON(
+            path: SDKEndpoint.surveyAttempt(attemptId),
+            body: SurveyProgressBody(
+                currentQuestionId: currentQuestionId,
+                progressSnapshot: snapshot
+            ),
+            responseType: EmptyResponse.self
         ) { result in
             switch result {
-            case .success(let env): completion(.success(env.flow))
-            case .failure(let err): completion(.failure(err))
+            case .success: completion(.success(()))
+            case .failure(let error): completion(.failure(error))
             }
         }
     }
@@ -245,7 +445,7 @@ final class APIClient {
         token: String,
         anonymousId: String,
         externalId: String?,
-        completion: @escaping (Result<String, APIError>) -> Void
+        completion: @escaping (Result<ResolveSurveyLinkResponse, APIError>) -> Void
     ) {
         let body = ResolveSurveyLinkRequest(
             token: token,
@@ -253,12 +453,12 @@ final class APIClient {
             externalId: externalId
         )
         postJSON(
-            path: "/v1/sdk/surveys/resolve",
+            path: SDKEndpoint.resolveSurveyLink,
             body: body,
             responseType: ResolveSurveyLinkResponse.self
         ) { result in
             switch result {
-            case .success(let res): completion(.success(res.surveyId))
+            case .success(let res): completion(.success(res))
             case .failure(let err): completion(.failure(err))
             }
         }
@@ -269,6 +469,7 @@ final class APIClient {
     private func performWithRetry<Response: Decodable>(
         request: URLRequest,
         attempt: Int,
+        allowRetry: Bool = true,
         completion: @escaping (Result<Response, APIError>) -> Void
     ) {
         logger.debug("HTTP \(request.httpMethod ?? "?") \(request.url?.absoluteString ?? "?") attempt=\(attempt + 1)")
@@ -279,6 +480,10 @@ final class APIClient {
                 return
             }
             if let error {
+                guard allowRetry else {
+                    self.callbackQueue.async { completion(.failure(.transport(error))) }
+                    return
+                }
                 self.handleRetryable(
                     decision: .retryable(retryAfter: nil),
                     request: request,
@@ -296,6 +501,12 @@ final class APIClient {
             case .succeed:
                 self.decode(data: data, completion: completion)
             case .retryable(let ra):
+                guard allowRetry else {
+                    self.callbackQueue.async {
+                        completion(.failure(.server(status: status, body: data)))
+                    }
+                    return
+                }
                 self.handleRetryable(
                     decision: .retryable(retryAfter: ra),
                     request: request,

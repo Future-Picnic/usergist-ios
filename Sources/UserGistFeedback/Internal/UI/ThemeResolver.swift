@@ -1,8 +1,8 @@
 import Foundation
 import UIKit
 
-/// Merges server prompt theme, developer override, and system defaults
-/// into a concrete `ResolvedTheme` used by the UI layer.
+/// Resolves system defaults, the global developer theme, and the dashboard's
+/// per-prompt theme into a concrete `ResolvedTheme` used by the UI layer.
 struct ResolvedTheme {
     let primary: UIColor
     let background: UIColor
@@ -16,7 +16,7 @@ struct ResolvedTheme {
 
     static let fallback: ResolvedTheme = {
         let body = UIFont.systemFont(ofSize: 15, weight: .regular)
-        let title = UIFont.systemFont(ofSize: 18, weight: .semibold)
+        let title = UIFont.systemFont(ofSize: 18, weight: .bold)
         let bold = UIFont.systemFont(ofSize: 15, weight: .semibold)
         return ResolvedTheme(
             primary: UIColor.systemBlue,
@@ -42,16 +42,16 @@ enum ThemeResolver {
         let sc = server?.colors
         let oc = override?.colors
 
-        let primary = oc?.primary ?? sc?.primary
-        let background = oc?.background ?? sc?.background
-        let text = oc?.text ?? sc?.text
-        let subtext = oc?.subtext ?? sc?.subtext
-        let border = oc?.border ?? sc?.border
-        let radius = override?.radius ?? server?.radius
-        let fontFamily = override?.fontFamily ?? server?.fontFamily ?? "Plus Jakarta Sans"
+        let primary = sc?.primary ?? oc?.primary
+        let background = sc?.background ?? oc?.background
+        let text = sc?.text ?? oc?.text
+        let subtext = sc?.subtext ?? oc?.subtext
+        let border = sc?.border ?? oc?.border
+        let radius = server?.radius ?? override?.radius
+        let fontFamily = server?.fontFamily ?? override?.fontFamily ?? "Plus Jakarta Sans"
 
         let bodyFont = buildFont(family: fontFamily, size: 15, weight: .regular, fallback: fallback.font)
-        let titleFont = buildFont(family: fontFamily, size: 18, weight: .semibold, fallback: fallback.titleFont)
+        let titleFont = buildFont(family: fontFamily, size: 18, weight: .bold, fallback: fallback.titleFont)
         let boldFont = buildFont(family: fontFamily, size: 15, weight: .semibold, fallback: fallback.boldFont)
 
         return ResolvedTheme(

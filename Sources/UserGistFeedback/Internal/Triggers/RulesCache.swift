@@ -22,6 +22,10 @@ final class RulesCache {
         queue.sync { triggersByEvent[eventName] ?? [] }
     }
 
+    func snapshot() -> [ArmedTrigger] {
+        queue.sync { allTriggers }
+    }
+
     /// Replace the cached set with `triggers`. Also persists to disk.
     func replace(_ triggers: [ArmedTrigger]) {
         queue.sync {

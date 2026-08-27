@@ -1,8 +1,8 @@
 # UserGistFeedback iOS SDK (experimental)
 
-This native Swift SDK is not launch-supported yet. Its authenticated-subject,
-durable-instruction, endpoint-parity, and release-device gates are tracked in
-`packages/PARITY.md`. Use the React Native SDK for the supported v0.1 launch.
+This native Swift SDK implements the React Native reference protocol, but is
+still experimental until package release validation and physical-device push
+testing are complete. See `packages/PARITY.md` for the remaining gates.
 
 ```swift
 import UserGistFeedback
@@ -13,12 +13,19 @@ UserGist.shared.initialize(
 )
 
 UserGist.shared.setConsent(Consent(analytics: true, feedback: true))
-UserGist.shared.identify(userId: "user-123", properties: ["plan": "pro"])
+// Mint this st_ token on your authenticated backend. Never ship an rtk_ token.
+UserGist.shared.identify(
+    userId: "user-123",
+    properties: ["plan": "pro"],
+    subjectToken: subjectToken
+)
 UserGist.shared.track("completed_checkout", properties: ["amount": 42.0])
 ```
 
-Local prompt evaluation in this package is experimental and is not the
-server-authoritative delivery contract used by the launch-supported RN SDK.
+Initialization creates or resumes an authenticated anonymous subject session.
+`identify` is queued durably, switches to the backend-minted identified subject
+token only after the server accepts it, persists segment properties, and emits
+the same `$identify` lifecycle event as the React Native reference.
 
 ## Installation
 
@@ -35,8 +42,32 @@ Or in `Package.swift`:
 
 See `Sources/UserGistFeedback/UserGist.swift` and `Sources/UserGistFeedback/Public/`.
 
+The SDK includes consent-scoped event batching, permanent-failure isolation,
+durable mutation and instruction queues, local armed prompt/survey/in-app
+evaluation, persistent survey resume state, and one process-wide modal queue.
+Identity and consent prefer Keychain with a compatibility fallback. Subject and
+push credentials plus pending mutations fail closed and are never persisted to
+plaintext when Keychain is unavailable; bounded campaign and analytics metadata
+are versioned on disk.
+
+Push token lifecycle, permission requests/status, silent acks, beacons, channel
+preferences, and host-forwarded notification callbacks are implemented. The
+React Native SDK's high-level automatic enable/disable, badge, and initial-
+notification helpers are not yet mirrored. APNs credentials and physical-device
+tests are still required before push can be declared validated.
+
 ## Running tests
 
 ```sh
-swift test
+xcodebuild -scheme UserGistFeedback \
+  -destination 'generic/platform=iOS Simulator' \
+  CODE_SIGNING_ALLOWED=NO build
+```
+
+Run the Swift Package tests on an iOS Simulator (a host `swift test` invocation
+targets macOS and cannot import UIKit):
+
+```sh
+xcodebuild test -scheme UserGistFeedback-Package \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```

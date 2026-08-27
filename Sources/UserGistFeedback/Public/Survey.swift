@@ -19,15 +19,18 @@ public struct SurveySummary: Codable, Sendable, Equatable {
 
 /// Lifecycle callbacks for survey rendering handled by the host app.
 public struct SurveyHandlers {
+    public var onInvite: ((SurveySummary) -> Void)?
     public var onShow: ((String) -> Void)?
     public var onComplete: ((String, String) -> Void)?
     public var onAbandon: ((String, String) -> Void)?
 
     public init(
+        onInvite: ((SurveySummary) -> Void)? = nil,
         onShow: ((String) -> Void)? = nil,
         onComplete: ((String, String) -> Void)? = nil,
         onAbandon: ((String, String) -> Void)? = nil
     ) {
+        self.onInvite = onInvite
         self.onShow = onShow
         self.onComplete = onComplete
         self.onAbandon = onAbandon

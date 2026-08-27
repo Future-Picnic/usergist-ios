@@ -1,13 +1,12 @@
 import Foundation
 import UIKit
 
-/// Short free-text answer. Backed by `UITextField` (single line is enough for
-/// the "short text" contract; the dashboard "long answer" is a separate type
-/// out of scope for v1).
-final class ShortTextQuestionView: UIView, QuestionView, UITextFieldDelegate {
+/// Multiline short-text answer matching the React Native prompt renderer.
+final class ShortTextQuestionView: UIView, QuestionView, UITextViewDelegate {
     private let question: Question.ShortText
     private let theme: ResolvedTheme
-    private let textField = UITextField()
+    private let textView = UITextView()
+    private let placeholder = UILabel()
     var onValueChange: ((PromptAnswerValue) -> Void)?
 
     init(question: Question.ShortText, theme: ResolvedTheme) {
@@ -20,52 +19,48 @@ final class ShortTextQuestionView: UIView, QuestionView, UITextFieldDelegate {
     required init?(coder: NSCoder) { nil }
 
     var currentAnswer: PromptAnswerValue {
-        let raw = textField.text ?? ""
+        let raw = textView.text ?? ""
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return .none }
         return .text(trimmed)
     }
 
     private func buildUI() {
-        textField.placeholder = question.placeholder
-        textField.borderStyle = .none
-        textField.font = theme.font
-        textField.textColor = theme.text
-        textField.backgroundColor = theme.background
-        textField.delegate = self
-        textField.layer.borderWidth = 1
-        textField.layer.borderColor = theme.border.cgColor
-        textField.layer.cornerRadius = min(theme.radius * 0.5, 12)
-        textField.translatesAutoresizingMaskIntoConstraints = false
-        textField.addTarget(self, action: #selector(editingChanged), for: .editingChanged)
+        textView.font = theme.font
+        textView.textColor = theme.text
+        textView.backgroundColor = theme.background
+        textView.delegate = self
+        textView.layer.borderWidth = 1
+        textView.layer.borderColor = theme.border.cgColor
+        textView.layer.cornerRadius = 12
+        textView.textContainerInset = UIEdgeInsets(top: 10, left: 8, bottom: 10, right: 8)
+        textView.translatesAutoresizingMaskIntoConstraints = false
+        textView.accessibilityLabel = "Feedback text answer"
 
-        let padding = UIView()
-        padding.translatesAutoresizingMaskIntoConstraints = false
-        padding.widthAnchor.constraint(equalToConstant: 12).isActive = true
-        textField.leftView = padding
-        textField.leftViewMode = .always
+        placeholder.text = question.placeholder
+        placeholder.font = theme.font
+        placeholder.textColor = theme.subtext
+        placeholder.translatesAutoresizingMaskIntoConstraints = false
 
-        addSubview(textField)
+        addSubview(textView)
+        textView.addSubview(placeholder)
         NSLayoutConstraint.activate([
-            textField.leadingAnchor.constraint(equalTo: leadingAnchor),
-            textField.trailingAnchor.constraint(equalTo: trailingAnchor),
-            textField.topAnchor.constraint(equalTo: topAnchor),
-            textField.bottomAnchor.constraint(equalTo: bottomAnchor),
-            textField.heightAnchor.constraint(equalToConstant: 52)
+            textView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            textView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            textView.topAnchor.constraint(equalTo: topAnchor),
+            textView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            textView.heightAnchor.constraint(greaterThanOrEqualToConstant: 100),
+            placeholder.leadingAnchor.constraint(equalTo: textView.leadingAnchor, constant: 13),
+            placeholder.topAnchor.constraint(equalTo: textView.topAnchor, constant: 10)
         ])
     }
 
-    @objc private func editingChanged() {
-        // Enforce `maxLength` if set.
-        if let max = question.maxLength, max > 0, let text = textField.text, text.count > max {
-            textField.text = String(text.prefix(max))
+    func textViewDidChange(_ textView: UITextView) {
+        if let max = question.maxLength, max > 0, textView.text.count > max {
+            textView.text = String(textView.text.prefix(max))
         }
+        placeholder.isHidden = !textView.text.isEmpty
         onValueChange?(currentAnswer)
-    }
-
-    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        textField.resignFirstResponder()
-        return true
     }
 }
 
