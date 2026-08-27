@@ -176,7 +176,7 @@ public final class UserGist {
         }
     }
 
-    /// Applies developer-supplied theme overrides on top of server themes.
+    /// Sets global theme defaults underneath per-prompt dashboard themes.
     public func setThemeOverrides(_ theme: PromptTheme) {
         withRuntime { rt in
             rt.setThemeOverrides(theme)

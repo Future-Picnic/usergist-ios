@@ -53,6 +53,11 @@ final class SurveyContractTests: XCTestCase {
         XCTAssertEqual(flow.questions[0].title, "Choose a plan")
         XCTAssertEqual(flow.questions[0].options?.map(\.id), ["free", "pro"])
         XCTAssertEqual(flow.questions[1].scale, 10)
+        let rating = SurveyRatingInput.promptQuestion(for: flow.questions[1])
+        XCTAssertEqual(rating.display, .stars)
+        XCTAssertEqual(rating.scale, 10)
+        XCTAssertEqual(rating.lowLabel, "Poor")
+        XCTAssertEqual(rating.highLabel, "Great")
         XCTAssertEqual(flow.questions[2].body, "Thank you")
         XCTAssertNil(
             BranchEvaluator.nextQuestionId(
@@ -103,5 +108,36 @@ final class SurveyContractTests: XCTestCase {
         XCTAssertEqual(armed.cooldownSeconds, 90)
         XCTAssertEqual(armed.frequencyCap.perCampaignDays, 7)
         XCTAssertEqual(armed.survey.name, "Checkout")
+    }
+
+    func test_completionAcceptanceRejectsResetRaceAndPermanentFailure() {
+        XCTAssertTrue(Runtime.shouldAcceptSurveyCompletion(
+            delivered: false,
+            mutationQueued: true,
+            deliveryGeneration: 4,
+            currentGeneration: 4,
+            resetInProgress: false
+        ))
+        XCTAssertFalse(Runtime.shouldAcceptSurveyCompletion(
+            delivered: true,
+            mutationQueued: false,
+            deliveryGeneration: 4,
+            currentGeneration: 5,
+            resetInProgress: false
+        ))
+        XCTAssertFalse(Runtime.shouldAcceptSurveyCompletion(
+            delivered: true,
+            mutationQueued: false,
+            deliveryGeneration: 4,
+            currentGeneration: 4,
+            resetInProgress: true
+        ))
+        XCTAssertFalse(Runtime.shouldAcceptSurveyCompletion(
+            delivered: false,
+            mutationQueued: false,
+            deliveryGeneration: 4,
+            currentGeneration: 4,
+            resetInProgress: false
+        ))
     }
 }

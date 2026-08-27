@@ -24,6 +24,7 @@ final class Storage {
     let userStateFile: URL
     let showHistoryFile: URL
     let instructionStateFile: URL
+    let localInstructionDedupeFile: URL
 
     private let fileManager: FileManager
 
@@ -60,6 +61,7 @@ final class Storage {
         self.userStateFile = root.appendingPathComponent("user_state.json")
         self.showHistoryFile = root.appendingPathComponent("show_history.json")
         self.instructionStateFile = root.appendingPathComponent("instruction_state.json")
+        self.localInstructionDedupeFile = root.appendingPathComponent("local_instruction_dedupe.json")
     }
 
     // MARK: - Primitive I/O

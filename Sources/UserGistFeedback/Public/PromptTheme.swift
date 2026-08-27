@@ -3,8 +3,8 @@ import UIKit
 
 /// Visual overrides applied to rendered feedback prompts.
 ///
-/// These values are merged with the server-supplied prompt theme and the
-/// system defaults. Any `nil` field falls back to the prompt or system
+/// This global theme is applied over system defaults and under any per-prompt
+/// theme selected in the dashboard. Any `nil` field falls back to the system
 /// default.
 public struct PromptTheme: Codable, Equatable, Sendable {
     public struct Colors: Codable, Equatable, Sendable {

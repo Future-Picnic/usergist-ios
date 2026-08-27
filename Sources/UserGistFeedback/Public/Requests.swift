@@ -86,12 +86,41 @@ public struct RequestFollow: Codable, Sendable, Equatable {
 public struct RequestComment: Codable, Sendable, Equatable, Identifiable {
     public let id: String
     public let requestId: String
-    public let authorAnonymousId: String?
-    public let authorRole: String?
     public let body: String
+    public let authorAnonymousId: String
+    public let authorExternalId: String?
+    public let viewerIsAuthor: Bool
     public let createdAt: String
     public let updatedAt: String
-    public let isFromTeam: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case requestId
+        case body
+        case authorAnonymousId
+        case authorExternalId
+        case viewerIsAuthor
+        case createdAt
+        case updatedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        requestId = try values.decode(String.self, forKey: .requestId)
+        body = try values.decode(String.self, forKey: .body)
+        authorAnonymousId = try values.decodeIfPresent(
+            String.self,
+            forKey: .authorAnonymousId
+        ) ?? ""
+        authorExternalId = try values.decodeIfPresent(
+            String.self,
+            forKey: .authorExternalId
+        )
+        viewerIsAuthor = try values.decode(Bool.self, forKey: .viewerIsAuthor)
+        createdAt = try values.decode(String.self, forKey: .createdAt)
+        updatedAt = try values.decode(String.self, forKey: .updatedAt)
+    }
 }
 
 public struct GetRequestsOptions: Sendable {

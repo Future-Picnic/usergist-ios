@@ -27,6 +27,7 @@ final class Runtime {
     private let secureStore: SecureStore
     private let surveyStore: SurveyStore
     private let mutations: MutationQueue
+    private let localInstructionDedupe: LocalInstructionDedupe
     let requestsCache: RequestsCache
 
     /// Serial queue for all mutating operations.
@@ -42,7 +43,6 @@ final class Runtime {
     private var sessionRetryScheduled = false
     private var authenticatedRuntimeStarted = false
     private var isPollingInstructions = false
-    private var locallyHandledInstructionKeys: [String] = []
     private var surveyCooldownByCampaign: [String: Date] = [:]
     private var isFlushingMutations = false
     private var mutationFlushTimer: DispatchSourceTimer?
@@ -134,6 +134,10 @@ final class Runtime {
             queue: UserGistQueue.serial("survey-store")
         )
         self.mutations = MutationQueue(secure: secureStore, logger: logger)
+        self.localInstructionDedupe = LocalInstructionDedupe(
+            storage: storage,
+            logger: logger
+        )
         self.requestsCache = RequestsCache()
 
         // Seed user-state tracker from cached rules so first trigger fires
@@ -148,6 +152,7 @@ final class Runtime {
     func start() {
         work { [weak self] in
             guard let self else { return }
+            self.localInstructionDedupe.hydrate()
             let persisted = self.secureStore.read(.subjectToken)
                 .flatMap { String(data: $0, encoding: .utf8) }
             self.apiClient.setSubjectToken(persisted)
@@ -431,8 +436,8 @@ final class Runtime {
             self.pushRegistrar.reset()
             _ = self.secureStore.delete(.subjectToken)
             try? self.storage.deleteFile(at: self.storage.instructionStateFile)
+            self.localInstructionDedupe.clear()
             self.subjectToken = nil
-            self.locallyHandledInstructionKeys.removeAll()
             self.surveyCooldownByCampaign.removeAll()
             self.pendingPromptCapIds.removeAll()
             self.pendingSurveyCapIds.removeAll()
@@ -622,6 +627,11 @@ final class Runtime {
         answers: [String: SurveyAnswerValue],
         completion: @escaping (Bool) -> Void
     ) {
+        guard !resetInProgress else {
+            DispatchQueue.main.async { completion(false) }
+            return
+        }
+        let deliveryGeneration = resetGeneration
         let finalAnswers = answers.map {
             SurveyAnswerSubmission(questionId: $0.key, value: $0.value)
         }
@@ -642,16 +652,44 @@ final class Runtime {
         }
         mutationDeliveryCallbacks[mutationId] = { [weak self] delivered in
             guard let self else { return }
-            if delivered {
-                self.surveyStore.clear(surveyId: surveyId)
-                UserGist.shared.surveyHandlers.onComplete?(surveyId, attemptId)
+            self.work {
+                // A transient failure leaves the encrypted mutation queued.
+                // It is accepted only while the same reset generation remains
+                // active; a reset racing delivery invalidates the completion.
+                let accepted = Self.shouldAcceptSurveyCompletion(
+                    delivered: delivered,
+                    mutationQueued: self.mutations.contains(mutationId),
+                    deliveryGeneration: deliveryGeneration,
+                    currentGeneration: self.resetGeneration,
+                    resetInProgress: self.resetInProgress
+                )
+                if accepted {
+                    self.surveyStore.clear(surveyId: surveyId)
+                }
+                DispatchQueue.main.async {
+                    if accepted {
+                        UserGist.shared.surveyHandlers.onComplete?(surveyId, attemptId)
+                    }
+                    completion(accepted)
+                }
             }
-            completion(delivered)
         }
         flushMutations()
         if !isFlushingMutations {
             resolveMutationDelivery(mutationId, delivered: false)
         }
+    }
+
+    static func shouldAcceptSurveyCompletion(
+        delivered: Bool,
+        mutationQueued: Bool,
+        deliveryGeneration: UInt64,
+        currentGeneration: UInt64,
+        resetInProgress: Bool
+    ) -> Bool {
+        !resetInProgress &&
+            deliveryGeneration == currentGeneration &&
+            (delivered || mutationQueued)
     }
 
     private func abandonSurvey(
@@ -1222,21 +1260,15 @@ final class Runtime {
     }
 
     private func rememberLocalInstruction(type: String, refId: String, eventId: String) {
-        locallyHandledInstructionKeys.append(
+        localInstructionDedupe.remember(
             instructionKey(type: type, refId: refId, eventId: eventId)
         )
-        if locallyHandledInstructionKeys.count > 200 {
-            locallyHandledInstructionKeys.removeFirst(
-                locallyHandledInstructionKeys.count - 200
-            )
-        }
     }
 
     private func consumeLocalInstruction(type: String, refId: String, eventId: String) -> Bool {
-        let key = instructionKey(type: type, refId: refId, eventId: eventId)
-        guard let index = locallyHandledInstructionKeys.firstIndex(of: key) else { return false }
-        locallyHandledInstructionKeys.remove(at: index)
-        return true
+        localInstructionDedupe.consume(
+            instructionKey(type: type, refId: refId, eventId: eventId)
+        )
     }
 
     // MARK: - In-app presentation

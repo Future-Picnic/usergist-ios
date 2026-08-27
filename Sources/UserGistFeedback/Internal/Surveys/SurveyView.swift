@@ -74,6 +74,25 @@ final class SurveyViewModel: ObservableObject {
             onComplete(attemptId, answers)
         }
     }
+
+    func recordRatingSelection(_ value: SurveyAnswerValue, questionId: String) {
+        guard currentQuestionId == questionId else { return }
+        answers[questionId] = value
+        store.recordAnswer(
+            surveyId: surveyId,
+            questionId: questionId,
+            value: value,
+            nextQuestionId: questionId
+        )
+        onProgress(attemptId, questionId, answers)
+    }
+
+    func advanceRatingSelection(questionId: String) {
+        guard currentQuestionId == questionId,
+              let value = answers[questionId]
+        else { return }
+        recordAnswer(value)
+    }
 }
 
 @available(iOS 14.0, *)
@@ -134,11 +153,22 @@ struct SurveyView: View {
     @ViewBuilder
     private func questionInput(_ q: SurveyQuestion) -> some View {
         switch q.type {
-        case .rating, .nps:
-            let min = q.type == .nps ? 0 : 1
-            let max = q.type == .nps ? 10 : (q.scale ?? 5)
+        case .rating:
+            SurveyRatingInput(
+                question: q,
+                selected: selectedInt(q.id),
+                theme: .fallback,
+                onSelect: {
+                    viewModel.recordRatingSelection(.int($0), questionId: q.id)
+                },
+                onAutoAdvance: {
+                    viewModel.advanceRatingSelection(questionId: q.id)
+                }
+            )
+            .frame(height: SurveyRatingInput.preferredHeight(for: q))
+        case .nps:
             HStack {
-                ForEach(min...max, id: \.self) { v in
+                ForEach(0...10, id: \.self) { v in
                     Button(action: {
                         viewModel.recordAnswer(.int(v))
                     }) {
@@ -151,8 +181,15 @@ struct SurveyView: View {
             }
         case .shortText, .longText:
             VStack(alignment: .leading) {
-                TextField(q.placeholder ?? "", text: $textAnswer)
-                    .textFieldStyle(.roundedBorder)
+                SurveyTextInput(
+                    initial: textAnswer,
+                    accessibilityLabel: q.title,
+                    placeholder: q.placeholder ?? "",
+                    longForm: q.type == .longText,
+                    maxLength: q.maxLength,
+                    theme: .fallback
+                ) { textAnswer = $0 }
+                .id(q.id)
                 Button(action: {
                     viewModel.recordAnswer(.string(textAnswer))
                     textAnswer = ""
@@ -223,6 +260,11 @@ struct SurveyView: View {
                 viewModel.recordAnswer(.stringArray(selected))
             }
         )
+    }
+
+    private func selectedInt(_ id: String) -> Int? {
+        if case .int(let value) = viewModel.answers[id] { return value }
+        return nil
     }
 }
 

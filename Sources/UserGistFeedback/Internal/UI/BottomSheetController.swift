@@ -72,21 +72,24 @@ private final class PromptSheetTransitioning: NSObject, UIViewControllerTransiti
 
 private final class PromptSheetPresentationController: UIPresentationController {
     private let dimmer = UIView()
+    private var keyboardOverlap: CGFloat = 0
+    private var keyboardObservers: [NSObjectProtocol] = []
 
     override var frameOfPresentedViewInContainerView: CGRect {
         guard let container = containerView else { return .zero }
-        let safeTop = container.safeAreaInsets.top
-        let maxHeight = max(280, container.bounds.height - safeTop - 16)
-        let requested = presentedViewController.preferredContentSize.height
-        let height = min(max(requested, 280), maxHeight)
-        let y = container.bounds.height - height
-        return CGRect(x: 0, y: y, width: container.bounds.width, height: height)
+        return PromptSheetLayout.frame(
+            containerBounds: container.bounds,
+            safeTop: container.safeAreaInsets.top,
+            requestedHeight: presentedViewController.preferredContentSize.height,
+            keyboardOverlap: keyboardOverlap
+        )
     }
 
     override func presentationTransitionWillBegin() {
         guard let container = containerView else { return }
+        observeKeyboard()
         dimmer.frame = container.bounds
-        dimmer.backgroundColor = UIColor.black.withAlphaComponent(0.35)
+        dimmer.backgroundColor = UIColor.black.withAlphaComponent(0.4)
         dimmer.alpha = 0
         container.insertSubview(dimmer, at: 0)
         let tap = UITapGestureRecognizer(target: self, action: #selector(didTapDimmer))
@@ -103,13 +106,87 @@ private final class PromptSheetPresentationController: UIPresentationController 
         })
     }
 
+    override func dismissalTransitionDidEnd(_ completed: Bool) {
+        super.dismissalTransitionDidEnd(completed)
+        if completed { stopObservingKeyboard() }
+    }
+
     @objc private func didTapDimmer() {
         (presentedViewController as? BottomSheetController)?.requestDismiss()
     }
 
     override func containerViewDidLayoutSubviews() {
         super.containerViewDidLayoutSubviews()
+        dimmer.frame = containerView?.bounds ?? .zero
         presentedView?.frame = frameOfPresentedViewInContainerView
+    }
+
+    deinit {
+        stopObservingKeyboard()
+    }
+
+    private func observeKeyboard() {
+        guard keyboardObservers.isEmpty else { return }
+        let center = NotificationCenter.default
+        keyboardObservers = [
+            center.addObserver(
+                forName: UIResponder.keyboardWillChangeFrameNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.keyboardFrameWillChange(notification)
+            },
+            center.addObserver(
+                forName: UIResponder.keyboardWillHideNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.keyboardFrameWillChange(notification)
+            },
+        ]
+    }
+
+    private func stopObservingKeyboard() {
+        let center = NotificationCenter.default
+        keyboardObservers.forEach(center.removeObserver)
+        keyboardObservers.removeAll()
+    }
+
+    private func keyboardFrameWillChange(_ notification: Notification) {
+        guard let container = containerView else { return }
+        let info = notification.userInfo
+        let screenFrame = (info?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue ?? .zero
+        let frame = container.convert(screenFrame, from: nil)
+        keyboardOverlap = max(0, container.bounds.maxY - frame.minY)
+
+        let duration = (info?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.25
+        UIView.animate(
+            withDuration: duration,
+            delay: 0,
+            options: [.beginFromCurrentState, .curveEaseInOut]
+        ) {
+            self.presentedView?.frame = self.frameOfPresentedViewInContainerView
+        }
+    }
+}
+
+enum PromptSheetLayout {
+    static func frame(
+        containerBounds: CGRect,
+        safeTop: CGFloat,
+        requestedHeight: CGFloat,
+        keyboardOverlap: CGFloat
+    ) -> CGRect {
+        let overlap = min(max(keyboardOverlap, 0), containerBounds.height)
+        let usableBottom = containerBounds.maxY - overlap
+        let maxHeight = max(0, usableBottom - safeTop - 16)
+        let height = min(max(requestedHeight, 280), maxHeight)
+        return CGRect(
+            x: containerBounds.minX,
+            y: usableBottom - height,
+            width: containerBounds.width,
+            height: height
+        )
     }
 }
 

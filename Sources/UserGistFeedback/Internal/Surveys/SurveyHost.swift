@@ -57,22 +57,22 @@ enum SurveyHost {
                 onProgress: onProgress,
                 onComplete: onComplete
             )
-            var hosting: UIHostingController<NativeSurveyView>!
-            let closeAction: () -> Void = { [weak hosting] in
-                hosting?.dismiss(animated: true) {
+            let controllerBox = WeakSurveyControllerBox()
+            let closeAction: () -> Void = {
+                controllerBox.value?.dismiss(animated: true) {
                     currentController = nil
                     releaseCurrent = nil
                     release()
                 }
             }
             let abandonAction: (@escaping (Bool) -> Void) -> Void = {
-                [weak hosting] outcome in
+                outcome in
                 onAbandon(attemptId) { persisted in
                     guard persisted else {
                         outcome(false)
                         return
                     }
-                    hosting?.dismiss(animated: true) {
+                    controllerBox.value?.dismiss(animated: true) {
                         handlers.onAbandon?(surveyId, attemptId)
                         outcome(true)
                         currentController = nil
@@ -88,7 +88,8 @@ enum SurveyHost {
                 onClose: closeAction,
                 onAbandon: abandonAction
             )
-            hosting = UIHostingController(rootView: view)
+            let hosting = UIHostingController(rootView: view)
+            controllerBox.value = hosting
             currentController = hosting
             releaseCurrent = release
             hosting.modalPresentationStyle = .fullScreen
@@ -100,4 +101,9 @@ enum SurveyHost {
         }
     }
 
+}
+
+@available(iOS 14.0, *)
+private final class WeakSurveyControllerBox {
+    weak var value: UIViewController?
 }

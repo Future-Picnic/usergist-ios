@@ -55,6 +55,14 @@ final class NativeSurveyViewModel: ObservableObject {
 
     var canGoBack: Bool { flow.backNavigation && !history.isEmpty }
 
+    var canAdvanceCurrentQuestion: Bool {
+        guard let question = currentQuestion else { return false }
+        if question.type == .shortText || question.type == .longText {
+            return Self.isAnswered(answers[question.id])
+        }
+        return true
+    }
+
     func select(_ value: SurveyAnswerValue, autoAdvance: Bool) {
         guard let question = currentQuestion else { return }
         answers[question.id] = value
@@ -97,6 +105,11 @@ final class NativeSurveyViewModel: ObservableObject {
         } else {
             submitCompletion()
         }
+    }
+
+    func advance(ifCurrentQuestionId questionId: String) {
+        guard currentQuestionId == questionId else { return }
+        advance()
     }
 
     func goBack() {
@@ -184,11 +197,25 @@ struct NativeSurveyView: View {
                             Text(question.title)
                                 .font(Font(theme.titleFont))
                                 .foregroundColor(Color(theme.text))
+                                .multilineTextAlignment(
+                                    question.type == .rating ? .center : .leading
+                                )
+                                .frame(
+                                    maxWidth: .infinity,
+                                    alignment: question.type == .rating ? .center : .leading
+                                )
                                 .fixedSize(horizontal: false, vertical: true)
                             if let subtitle = question.subtitle, !subtitle.isEmpty {
                                 Text(subtitle)
                                     .font(Font(theme.font))
                                     .foregroundColor(Color(theme.subtext))
+                                    .multilineTextAlignment(
+                                        question.type == .rating ? .center : .leading
+                                    )
+                                    .frame(
+                                        maxWidth: .infinity,
+                                        alignment: question.type == .rating ? .center : .leading
+                                    )
                             }
                             questionInput(question)
                             if let error = viewModel.errorMessage {
@@ -201,7 +228,8 @@ struct NativeSurveyView: View {
                                 primaryButton(
                                     title: viewModel.isSubmitting ? "Submitting…" :
                                         (question.type == .infoScreen ? "Continue" : "Next"),
-                                    disabled: viewModel.isSubmitting,
+                                    disabled: viewModel.isSubmitting ||
+                                        !viewModel.canAdvanceCurrentQuestion,
                                     action: viewModel.advance
                                 )
                             }
@@ -340,11 +368,20 @@ struct NativeSurveyView: View {
                 maximum: question.maxSelections,
                 theme: theme
             ) { viewModel.select(.stringArray($0), autoAdvance: false) }
-        case .rating, .nps:
-            let lower = question.type == .nps ? 0 : 1
-            let upper = question.type == .nps ? 10 : (question.scale ?? 5)
+        case .rating:
+            SurveyRatingInput(
+                question: question,
+                selected: selectedInt(question.id),
+                theme: theme,
+                onSelect: { viewModel.select(.int($0), autoAdvance: false) },
+                onAutoAdvance: {
+                    viewModel.advance(ifCurrentQuestionId: question.id)
+                }
+            )
+            .frame(height: SurveyRatingInput.preferredHeight(for: question))
+        case .nps:
             ScoreGrid(
-                range: lower...upper,
+                range: 0...10,
                 selected: selectedInt(question.id),
                 lowLabel: question.lowLabel,
                 highLabel: question.highLabel,
@@ -367,8 +404,9 @@ struct NativeSurveyView: View {
         case .shortText, .longText:
             SurveyTextInput(
                 initial: selectedText(question.id),
+                accessibilityLabel: question.title,
                 placeholder: question.placeholder ?? "",
-                multiline: question.type == .longText,
+                longForm: question.type == .longText,
                 maxLength: question.maxLength,
                 theme: theme
             ) { viewModel.select(.string($0), autoAdvance: false) }
@@ -401,13 +439,12 @@ struct NativeSurveyView: View {
         Button(action: action) {
             Text(title)
                 .font(Font(theme.boldFont))
-                .frame(maxWidth: .infinity, minHeight: 48)
+                .frame(maxWidth: .infinity, minHeight: 52)
         }
-        .buttonStyle(PlainButtonStyle())
-        .foregroundColor(theme.primary.userGistContrastColor)
-        .background(Color(theme.primary))
-        .cornerRadius(min(theme.radius, 14))
-        .opacity(disabled ? 0.55 : 1)
+        .buttonStyle(SurveyPrimaryButtonStyle())
+        .foregroundColor(Color.white)
+        .background(Color(theme.primary).opacity(disabled ? 0.4 : 1))
+        .clipShape(Capsule())
         .disabled(disabled)
     }
 
@@ -449,6 +486,13 @@ struct NativeSurveyView: View {
             UIApplication.shared.open(url)
         }
         onClose()
+    }
+}
+
+@available(iOS 14.0, *)
+private struct SurveyPrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(configuration.isPressed ? 0.85 : 1)
     }
 }
 
@@ -552,52 +596,65 @@ private struct ScoreGrid: View {
 }
 
 @available(iOS 14.0, *)
-private struct SurveyTextInput: View {
+struct SurveyTextInput: View {
     @State private var value: String
+    let accessibilityLabel: String
     let placeholder: String
-    let multiline: Bool
+    let longForm: Bool
     let maxLength: Int?
     let theme: ResolvedTheme
     let onChange: (String) -> Void
 
     init(
         initial: String,
+        accessibilityLabel: String,
         placeholder: String,
-        multiline: Bool,
+        longForm: Bool,
         maxLength: Int?,
         theme: ResolvedTheme,
         onChange: @escaping (String) -> Void
     ) {
         _value = State(initialValue: initial)
+        self.accessibilityLabel = accessibilityLabel
         self.placeholder = placeholder
-        self.multiline = multiline
+        self.longForm = longForm
         self.maxLength = maxLength
         self.theme = theme
         self.onChange = onChange
     }
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            if multiline {
-                TextEditor(text: binding)
-                    .frame(minHeight: 132)
-            } else {
-                TextField(placeholder, text: binding)
-                    .frame(minHeight: 48)
+        VStack(alignment: .trailing, spacing: 4) {
+            ZStack(alignment: .topLeading) {
+                SurveyUIKitTextView(
+                    text: binding,
+                    accessibilityLabel: accessibilityLabel,
+                    theme: theme
+                )
+                if value.isEmpty && !placeholder.isEmpty {
+                    Text(placeholder)
+                        .font(Font(theme.font))
+                        .foregroundColor(Color(theme.subtext))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
             }
-            if let maxLength {
-                Text("\(value.count) / \(maxLength)")
+            .frame(height: longForm ? 120 : 100)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color(theme.border), lineWidth: 1)
+            )
+            if longForm, let maxLength {
+                Text(verbatim: "\(value.count) / \(maxLength)")
                     .font(.caption)
                     .foregroundColor(Color(theme.subtext))
+                    .accessibilityIdentifier("survey-text-counter")
             }
         }
         .font(Font(theme.font))
         .foregroundColor(Color(theme.text))
-        .padding(.horizontal, 12)
-        .overlay(
-            RoundedRectangle(cornerRadius: min(theme.radius, 12))
-                .stroke(Color(theme.border), lineWidth: 1)
-        )
     }
 
     private var binding: Binding<String> {
@@ -609,6 +666,48 @@ private struct SurveyTextInput: View {
                 onChange(clipped)
             }
         )
+    }
+}
+
+@available(iOS 14.0, *)
+private struct SurveyUIKitTextView: UIViewRepresentable {
+    @Binding var text: String
+    let accessibilityLabel: String
+    let theme: ResolvedTheme
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.delegate = context.coordinator
+        view.backgroundColor = .clear
+        view.textContainerInset = UIEdgeInsets(top: 8, left: 7, bottom: 8, right: 7)
+        view.textContainer.lineFragmentPadding = 5
+        view.isScrollEnabled = true
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        if view.text != text { view.text = text }
+        view.backgroundColor = .clear
+        view.font = theme.font
+        view.textColor = theme.text
+        view.tintColor = theme.primary
+        view.accessibilityLabel = accessibilityLabel
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        @Binding private var text: String
+
+        init(text: Binding<String>) {
+            _text = text
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            text = textView.text
+        }
     }
 }
 

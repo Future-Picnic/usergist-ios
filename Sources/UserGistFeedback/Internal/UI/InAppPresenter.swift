@@ -61,7 +61,7 @@ final class InAppPresenter {
     }
 }
 
-private final class InAppMessageController: UIViewController,
+final class InAppMessageController: UIViewController,
     UIAdaptivePresentationControllerDelegate, UIGestureRecognizerDelegate {
     private let message: ArmedInAppMessage
     private let theme: ResolvedTheme
@@ -149,6 +149,7 @@ private final class InAppMessageController: UIViewController,
         }
 
         card.translatesAutoresizingMaskIntoConstraints = false
+        card.accessibilityIdentifier = "usergist_inapp_card"
         card.backgroundColor = theme.background
         card.layer.cornerRadius = isFull ? 0 : theme.radius
         card.layer.masksToBounds = true
@@ -271,6 +272,11 @@ private final class InAppMessageController: UIViewController,
                 constant: -32
             )
             preferredWidth.priority = .defaultHigh
+            // UIScrollView has no intrinsic height. Prefer the content's
+            // natural height while retaining the required viewport cap so
+            // oversized messages scroll instead of collapsing the card.
+            let contentHeight = card.heightAnchor.constraint(equalTo: stack.heightAnchor)
+            contentHeight.priority = .defaultHigh
             NSLayoutConstraint.activate([
                 card.centerXAnchor.constraint(equalTo: view.centerXAnchor),
                 card.centerYAnchor.constraint(equalTo: view.centerYAnchor),
@@ -278,7 +284,8 @@ private final class InAppMessageController: UIViewController,
                 card.trailingAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
                 card.widthAnchor.constraint(lessThanOrEqualToConstant: 420),
                 card.heightAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.heightAnchor, multiplier: 0.86),
-                preferredWidth
+                preferredWidth,
+                contentHeight
             ])
         }
     }

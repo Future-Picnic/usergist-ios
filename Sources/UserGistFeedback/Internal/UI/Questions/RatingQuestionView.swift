@@ -12,11 +12,12 @@ final class RatingQuestionView: UIView, QuestionView {
     private var selectedValue: Int?
     var onValueChange: ((PromptAnswerValue) -> Void)?
 
-    init(question: Question.Rating, theme: ResolvedTheme) {
+    init(question: Question.Rating, theme: ResolvedTheme, initialValue: Int? = nil) {
         self.question = question
         self.theme = theme
         super.init(frame: .zero)
         buildUI()
+        setSelectedValue(initialValue)
     }
 
     required init?(coder: NSCoder) { nil }
@@ -110,25 +111,31 @@ final class RatingQuestionView: UIView, QuestionView {
     }
 
     @objc private func didTap(_ sender: UIButton) {
-        selectedValue = sender.tag
+        setSelectedValue(sender.tag)
         Haptics.impactLight()
+        onValueChange?(currentAnswer)
+    }
+
+    func setSelectedValue(_ value: Int?) {
+        let scale = max(2, question.scale)
+        selectedValue = value.flatMap { (1...scale).contains($0) ? $0 : nil }
         for button in buttons {
             switch displayMode {
             case .stars:
+                let isFilled = selectedValue.map { button.tag <= $0 } ?? false
                 button.setTitleColor(
-                    button.tag <= sender.tag ? theme.primary : theme.border,
+                    isFilled ? theme.primary : theme.border,
                     for: .normal
                 )
             case .emoji:
-                button.alpha = button.tag == sender.tag ? 1 : 0.35
+                button.alpha = selectedValue == nil || button.tag == selectedValue ? 1 : 0.35
             case .numeric:
-                let isSelected = button.tag == sender.tag
+                let isSelected = button.tag == selectedValue
                 button.backgroundColor = isSelected ? theme.primary : theme.background
                 button.setTitleColor(isSelected ? theme.background : theme.text, for: .normal)
             }
-            button.accessibilityTraits = button.tag == sender.tag ? [.button, .selected] : .button
+            button.accessibilityTraits = button.tag == selectedValue ? [.button, .selected] : .button
         }
-        onValueChange?(currentAnswer)
     }
 
     private var displayMode: Question.Rating.Display {
