@@ -25,6 +25,7 @@ public struct UserGistPushMessage: Sendable {
     public let deepLink: String?
     public let title: String?
     public let body: String?
+    public let actionButtons: [PushActionButton]
 
     public init(
         campaignId: String? = nil,
@@ -33,7 +34,8 @@ public struct UserGistPushMessage: Sendable {
         language: String? = nil,
         deepLink: String? = nil,
         title: String? = nil,
-        body: String? = nil
+        body: String? = nil,
+        actionButtons: [PushActionButton] = []
     ) {
         self.campaignId = campaignId
         self.variantId = variantId
@@ -42,6 +44,7 @@ public struct UserGistPushMessage: Sendable {
         self.deepLink = deepLink
         self.title = title
         self.body = body
+        self.actionButtons = actionButtons
     }
 
     /// Attempts to parse a UserGist push message out of an APNs userInfo
@@ -58,8 +61,25 @@ public struct UserGistPushMessage: Sendable {
             language: usergist["language"] as? String,
             deepLink: usergist["deepLink"] as? String,
             title: alert?["title"] as? String,
-            body: alert?["body"] as? String
+            body: alert?["body"] as? String,
+            actionButtons: PushActionButton.parse(usergist["actionButtons"])
         )
+    }
+}
+
+public struct PushActionButton: Codable, Sendable, Equatable {
+    public let label: String
+    public let action: String
+    public let target: String?
+    public let actionJson: JsonAction?
+
+    fileprivate static func parse(_ value: Any?) -> [PushActionButton] {
+        guard let value,
+              JSONSerialization.isValidJSONObject(value),
+              let data = try? JSONSerialization.data(withJSONObject: value),
+              let buttons = try? JSONDecoder().decode([PushActionButton].self, from: data)
+        else { return [] }
+        return buttons
     }
 }
 
@@ -68,6 +88,7 @@ public struct PushHandlers: Sendable {
     public var onReceive: (@Sendable (UserGistPushMessage, [AnyHashable: Any]) -> Void)?
     public var onOpen: (@Sendable (UserGistPushMessage) -> Void)?
     public var onAction: (@Sendable (UserGistPushMessage, String) -> Void)?
+    public var onJsonAction: (@Sendable (JsonAction, UserGistPushMessage, String) -> Void)?
     public var onDismiss: (@Sendable (UserGistPushMessage) -> Void)?
     public var onSilent: (@Sendable (String) -> Void)?
     public var onEvent: (@Sendable (String, [String: Any]) -> Void)?
@@ -76,6 +97,7 @@ public struct PushHandlers: Sendable {
         onReceive: (@Sendable (UserGistPushMessage, [AnyHashable: Any]) -> Void)? = nil,
         onOpen: (@Sendable (UserGistPushMessage) -> Void)? = nil,
         onAction: (@Sendable (UserGistPushMessage, String) -> Void)? = nil,
+        onJsonAction: (@Sendable (JsonAction, UserGistPushMessage, String) -> Void)? = nil,
         onDismiss: (@Sendable (UserGistPushMessage) -> Void)? = nil,
         onSilent: (@Sendable (String) -> Void)? = nil,
         onEvent: (@Sendable (String, [String: Any]) -> Void)? = nil
@@ -83,6 +105,7 @@ public struct PushHandlers: Sendable {
         self.onReceive = onReceive
         self.onOpen = onOpen
         self.onAction = onAction
+        self.onJsonAction = onJsonAction
         self.onDismiss = onDismiss
         self.onSilent = onSilent
         self.onEvent = onEvent
@@ -344,6 +367,17 @@ public final class UserGistPush {
             let cb = handlers.onAction
             lock.unlock()
             cb?(msg, actionIdentifier)
+            let indexed = actionIdentifier.hasPrefix("usergist_action_")
+                ? Int(actionIdentifier.dropFirst("usergist_action_".count))
+                : nil
+            let button = indexed.flatMap { msg.actionButtons.indices.contains($0) ? msg.actionButtons[$0] : nil }
+                ?? msg.actionButtons.first(where: { $0.label == actionIdentifier })
+            if button?.action == "json", let actionJson = button?.actionJson {
+                lock.lock()
+                let jsonCb = handlers.onJsonAction
+                lock.unlock()
+                jsonCb?(actionJson, msg, actionIdentifier)
+            }
         } else {
             emit(event: "$push_opened", message: msg)
             lock.lock()

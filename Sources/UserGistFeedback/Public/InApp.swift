@@ -13,17 +13,46 @@ public enum InAppCtaAction: String, Codable, Sendable {
     case deepLink = "deep_link"
     case dismiss
     case customEvent = "custom_event"
+    case json
+}
+
+/// Arbitrary, JSON-safe action data authored in UserGist and handled by the host app.
+public struct JsonAction: Codable, @unchecked Sendable, Equatable {
+    public let value: [String: Any]
+
+    public init(_ value: [String: Any]) {
+        self.value = value
+    }
+
+    public init(from decoder: Decoder) throws {
+        value = try [String: AnyCodable](from: decoder).mapValues(\.value)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try value.mapValues { AnyCodable($0) }.encode(to: encoder)
+    }
+
+    public static func == (lhs: JsonAction, rhs: JsonAction) -> Bool {
+        NSDictionary(dictionary: lhs.value).isEqual(to: rhs.value)
+    }
 }
 
 public struct InAppCta: Codable, Sendable, Equatable {
     public let label: String
     public let action: InAppCtaAction
     public let target: String?
+    public let actionJson: JsonAction?
 
-    public init(label: String, action: InAppCtaAction, target: String? = nil) {
+    public init(
+        label: String,
+        action: InAppCtaAction,
+        target: String? = nil,
+        actionJson: JsonAction? = nil
+    ) {
         self.label = label
         self.action = action
         self.target = target
+        self.actionJson = actionJson
     }
 }
 
@@ -107,6 +136,7 @@ public struct InAppCtaClick: Sendable, Equatable {
     public let target: String?
     public let label: String
     public let index: Int
+    public let actionJson: JsonAction?
 }
 
 /// Optional lifecycle callbacks for SDK-rendered in-app messages.
@@ -114,14 +144,17 @@ public struct InAppHandlers {
     public var onShow: ((String) -> Void)?
     public var onDismiss: ((String, InAppDismissReason) -> Void)?
     public var onCtaClick: ((InAppCtaClick) -> Void)?
+    public var onJsonAction: ((JsonAction, InAppCtaClick) -> Void)?
 
     public init(
         onShow: ((String) -> Void)? = nil,
         onDismiss: ((String, InAppDismissReason) -> Void)? = nil,
-        onCtaClick: ((InAppCtaClick) -> Void)? = nil
+        onCtaClick: ((InAppCtaClick) -> Void)? = nil,
+        onJsonAction: ((JsonAction, InAppCtaClick) -> Void)? = nil
     ) {
         self.onShow = onShow
         self.onDismiss = onDismiss
         self.onCtaClick = onCtaClick
+        self.onJsonAction = onJsonAction
     }
 }
