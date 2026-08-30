@@ -1340,13 +1340,18 @@ final class Runtime {
                     }
                 }
                 DispatchQueue.main.async {
-                    UserGist.shared.inAppHandlers.onCtaClick?(InAppCtaClick(
+                    let click = InAppCtaClick(
                         messageId: message.messageId,
                         action: cta.action,
                         target: cta.target,
                         label: cta.label,
-                        index: index
-                    ))
+                        index: index,
+                        actionJson: cta.actionJson
+                    )
+                    UserGist.shared.inAppHandlers.onCtaClick?(click)
+                    if cta.action == .json, let actionJson = cta.actionJson {
+                        UserGist.shared.inAppHandlers.onJsonAction?(actionJson, click)
+                    }
                     if (cta.action == .openURL || cta.action == .deepLink),
                        let target = cta.target,
                        let url = URL(string: target),

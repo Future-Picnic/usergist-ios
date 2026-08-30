@@ -50,4 +50,25 @@ final class InAppContractTests: XCTestCase {
         XCTAssertTrue(message.ctas.isEmpty)
         XCTAssertFalse(message.forceShow)
     }
+
+    func testDecodesJsonActionPayload() throws {
+        let data = Data(#"""
+        {
+          "messageId":"message-json",
+          "format":"modal",
+          "title":"Selected offer",
+          "ctas":[{
+            "label":"Show price",
+            "action":"json",
+            "actionJson":{"type":"show_special_price","price":19}
+          }]
+        }
+        """#.utf8)
+
+        let message = try JSONDecoder().decode(ArmedInAppMessage.self, from: data)
+
+        XCTAssertEqual(message.ctas.first?.action, .json)
+        XCTAssertEqual(message.ctas.first?.actionJson?.value["type"] as? String, "show_special_price")
+        XCTAssertEqual(message.ctas.first?.actionJson?.value["price"] as? Int, 19)
+    }
 }
