@@ -21,7 +21,7 @@ import Foundation
 ///      to deliver whatever we have when we're cut off early.
 ///
 /// Configuration is read from the host app's Info.plist:
-///   • `UserGistApiUrl` — defaults to `https://api.usergist.studio`
+///   • `UserGistApiUrl` — defaults to `https://api.usergist.com`
 ///   • `UserGistWriteKey` — required; same key the main SDK uses
 ///   • `UserGistAppGroup` — optional shared keychain access group;
 ///     when set, the extension reads the write key from the App Group's

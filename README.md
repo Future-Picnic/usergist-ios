@@ -1,8 +1,7 @@
-# UserGistFeedback iOS SDK (experimental)
+# UserGistFeedback iOS SDK
 
-This native Swift SDK implements the React Native reference protocol, but is
-still experimental until package release validation and physical-device push
-testing are complete. See `packages/PARITY.md` for the remaining gates.
+Production Swift SDK for userGist feedback, surveys, in-app messaging, feature
+requests, analytics events, and host-compatible APNs delivery.
 
 ```swift
 import UserGistFeedback
@@ -29,13 +28,13 @@ the same `$identify` lifecycle event as the React Native reference.
 
 ## Installation
 
-Add this package in Xcode: **File → Add Packages…** and point at the
-monorepo path or the published repository.
+Add this package in Xcode: **File → Add Packages…** and enter
+`https://github.com/Future-Picnic/usergist-ios.git`.
 
 Or in `Package.swift`:
 
 ```swift
-.package(path: "../sdk-ios")
+.package(url: "https://github.com/Future-Picnic/usergist-ios.git", from: "0.1.0")
 ```
 
 ## Public API
@@ -69,5 +68,9 @@ targets macOS and cannot import UIKit):
 
 ```sh
 xcodebuild test -scheme UserGistFeedback-Package \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro'
 ```
+
+## License
+
+MIT
