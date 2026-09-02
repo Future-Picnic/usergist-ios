@@ -109,12 +109,12 @@ final class TLSPinnedSessionDelegate: NSObject, URLSessionDelegate {
 enum TLSPinEnv {
     static let leaf = "USERGIST_TLS_PIN_LEAF"
     static let backup = "USERGIST_TLS_PIN_BACKUP"
-    static let pinnedHost = "api.usergist.studio"
+    static let pinnedHost = "api.usergist.com"
 }
 
 extension UserGistConfig {
     /// Pin sets used by the SDK's URLSession. Defaults to pinning
-    /// `api.usergist.studio` against the two production SPKI hashes; set
+    /// `api.usergist.com` against the two production SPKI hashes; set
     /// the env vars in `TLSPinEnv` to override in development. Empty pins
     /// disable pinning for that host.
     var tlsPinSets: [TLSPinSet] {

@@ -16,9 +16,11 @@ public enum Environment: String, Sendable {
     public var defaultAPIURL: URL {
         switch self {
         case .production:
-            return URL(string: "https://api.usergist.studio")!
+            return URL(string: "https://api.usergist.com")!
         case .staging:
-            return URL(string: "https://api.staging.usergist.studio")!
+            // Staging is a customer data environment, not a separate
+            // UserGist control-plane deployment.
+            return URL(string: "https://api.usergist.com")!
         case .development:
             return URL(string: "http://localhost:28743")!
         }

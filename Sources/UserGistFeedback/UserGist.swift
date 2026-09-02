@@ -221,6 +221,15 @@ public final class UserGist {
         return rt?.anonymousId ?? ""
     }
 
+    /// Stable identified-user ID accepted by the server, or `nil` while the
+    /// installation is anonymous.
+    public var externalId: String? {
+        lock.lock()
+        let rt = runtime
+        lock.unlock()
+        return rt?.externalId
+    }
+
     // MARK: - Surveys
 
     /// Handlers invoked during the survey lifecycle (show / complete / abandon).

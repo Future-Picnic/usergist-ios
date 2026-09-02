@@ -302,6 +302,7 @@ final class Runtime {
     // MARK: - Public-facing operations (called via UserGist singleton)
 
     var anonymousId: String { identityStore.anonymousId }
+    var externalId: String? { identityStore.current().externalId }
 
     func identify(userId: String, properties: [String: Any]?, subjectToken: String) {
         guard !userId.isEmpty else {

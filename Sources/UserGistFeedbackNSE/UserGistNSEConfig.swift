@@ -10,7 +10,7 @@ import Foundation
 ///   2. The extension target's own Info.plist.
 ///
 /// Required keys: `UserGistWriteKey`. Optional: `UserGistApiUrl` (defaults
-/// to https://api.usergist.studio), `UserGistAppGroup`.
+/// to https://api.usergist.com), `UserGistAppGroup`.
 enum UserGistNSEConfig {
 
     static var writeKey: String? {
@@ -22,7 +22,7 @@ enum UserGistNSEConfig {
     }
 
     static var apiUrl: URL? {
-        let raw = readString(key: "UserGistApiUrl") ?? "https://api.usergist.studio"
+        let raw = readString(key: "UserGistApiUrl") ?? "https://api.usergist.com"
         return URL(string: raw)
     }
 
