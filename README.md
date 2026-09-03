@@ -52,8 +52,10 @@ are versioned on disk.
 Push token lifecycle, permission requests/status, silent acks, beacons, channel
 preferences, and host-forwarded notification callbacks are implemented. The
 React Native SDK's high-level automatic enable/disable, badge, and initial-
-notification helpers are not yet mirrored. APNs credentials and physical-device
-tests are still required before push can be declared validated.
+notification helpers are not yet mirrored. The userGist APNs delivery path has
+passed end-to-end physical-device validation. Every integrating app must still
+configure its own APNs credentials and bundle identifiers, forward its host
+callbacks, and test a signed build on its own physical device.
 
 ## Running tests
 
