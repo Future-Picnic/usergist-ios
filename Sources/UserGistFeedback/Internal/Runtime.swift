@@ -1105,7 +1105,10 @@ final class Runtime {
             path: SDKEndpoint.instructions,
             query: [
                 URLQueryItem(name: "after", value: String(stored.cursor)),
-                URLQueryItem(name: "limit", value: "100")
+                URLQueryItem(name: "limit", value: "100"),
+                URLQueryItem(name: "protocolVersion", value: "2"),
+                URLQueryItem(name: "platform", value: "ios"),
+                URLQueryItem(name: "anonymousId", value: identityStore.anonymousId)
             ],
             responseType: InstructionEnvelope.self
         ) { [weak self] result in
