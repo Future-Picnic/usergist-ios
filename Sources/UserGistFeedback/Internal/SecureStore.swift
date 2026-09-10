@@ -43,7 +43,7 @@ final class SecureStore {
             return readFallbackOrMigrate(key)
         }
         guard status == errSecSuccess else {
-            logger.warn("SecureStore.read(\(key.rawValue)) failed: \(status)")
+            logFailure("read", key: key, status: status)
             if key.requiresSecureStorage {
                 fallback.removeObject(forKey: fallbackKey(key))
                 return nil
@@ -73,13 +73,13 @@ final class SecureStore {
             return true
         }
         if updateStatus != errSecItemNotFound {
-            logger.warn("SecureStore.write(\(key.rawValue)) update failed: \(updateStatus)")
+            logFailure("update", key: key, status: updateStatus)
         }
         var addQuery = query
         addQuery.merge(attributes) { _, new in new }
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         if addStatus != errSecSuccess {
-            logger.warn("SecureStore.write(\(key.rawValue)) add failed: \(addStatus)")
+            logFailure("add", key: key, status: addStatus)
             if key.requiresSecureStorage {
                 fallback.removeObject(forKey: fallbackKey(key))
                 return false
@@ -96,6 +96,13 @@ final class SecureStore {
         let status = SecItemDelete(baseQuery(key) as CFDictionary)
         fallback.removeObject(forKey: fallbackKey(key))
         return status == errSecSuccess || status == errSecItemNotFound
+    }
+
+    private func logFailure(_ operation: String, key: Key, status: OSStatus) {
+        logger.warn("SecureStore.\(operation)(\(key.rawValue)) failed: \(status)")
+        if status == errSecMissingEntitlement {
+            logger.warn("Keychain -34018 (errSecMissingEntitlement): check host signing/entitlements. On Simulator, remove CODE_SIGNING_ALLOWED=NO and rebuild. Subject sessions require working Keychain storage.")
+        }
     }
 
     private func baseQuery(_ key: Key) -> [String: Any] {

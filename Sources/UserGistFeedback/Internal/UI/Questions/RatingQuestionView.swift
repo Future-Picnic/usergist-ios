@@ -71,8 +71,8 @@ final class RatingQuestionView: UIView, QuestionView {
             high.font = UIFont.systemFont(ofSize: 12)
             labels.addArrangedSubview(low)
             labels.addArrangedSubview(high)
-            labels.widthAnchor.constraint(equalTo: widthAnchor).isActive = true
             stack.addArrangedSubview(labels)
+            labels.widthAnchor.constraint(equalTo: widthAnchor).isActive = true
         }
     }
 
