@@ -34,7 +34,7 @@ Add this package in Xcode: **File → Add Packages…** and enter
 Or in `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/Future-Picnic/usergist-ios.git", from: "0.1.0")
+.package(url: "https://github.com/Future-Picnic/usergist-ios.git", from: "0.1.1")
 ```
 
 ## Public API
@@ -52,10 +52,37 @@ are versioned on disk.
 Push token lifecycle, permission requests/status, silent acks, beacons, channel
 preferences, and host-forwarded notification callbacks are implemented. The
 React Native SDK's high-level automatic enable/disable, badge, and initial-
-notification helpers are not yet mirrored. APNs credentials and physical-device
-tests are still required before push can be declared validated.
+notification helpers are not yet mirrored. The userGist APNs delivery path has
+passed end-to-end physical-device validation. Every integrating app must still
+configure its own APNs credentials and bundle identifiers, forward its host
+callbacks, and test a signed build on its own physical device.
+
+## Troubleshooting simulator onboarding
+
+If `$app_open` does not arrive and diagnostics report Keychain error
+`-34018` (`errSecMissingEntitlement`) or `unable to persist UserGist subject
+session`, check the host app's signing configuration. A simulator app built
+with `CODE_SIGNING_ALLOWED=NO` can fail Keychain access. Remove that override,
+rebuild with simulator signing enabled, and reinstall/relaunch the signed build.
+For other builds, check the host's signing and Keychain entitlements.
+
+The SDK requires secure storage for subject credentials and will not start
+authenticated event delivery when saving the session fails. This affects both
+anonymous and identified users; changing orientation or identifying a user
+does not fix a Keychain failure. After rebuilding, grant analytics consent and
+verify that the API accepts `$app_open` before testing campaign delivery.
+
+In SDK 0.1.0, a rating with either `lowLabel` or `highLabel` can crash with
+`NSGenericException` / "no common ancestor". This is a constraint activation
+order bug, independent of portrait or landscape orientation, in the shared
+feedback/survey rating view. Upgrade to **0.1.1 or later** to receive the fix.
+If an existing project still resolves 0.1.0, update its package dependency and
+confirm `Package.resolved` records 0.1.1 or later before rebuilding.
 
 ## Running tests
+
+Compilation-only check (do not use this unsigned configuration for installing
+and running a host app or validating onboarding):
 
 ```sh
 xcodebuild -scheme UserGistFeedback \
@@ -68,7 +95,7 @@ targets macOS and cannot import UIKit):
 
 ```sh
 xcodebuild test -scheme UserGistFeedback-Package \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
 ## License
