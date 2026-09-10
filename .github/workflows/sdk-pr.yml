@@ -1,0 +1,25 @@
+name: Public SDK validation
+run-name: SDK snapshot ${{ inputs.snapshot }}
+on:
+  workflow_dispatch:
+    inputs:
+      snapshot:
+        description: Immutable public SDK snapshot commit
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: public-sdk-${{ inputs.snapshot }}
+  cancel-in-progress: false
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.snapshot }}
+          persist-credentials: false
+      - run: swift package --package-path packages/sdk-ios dump-package
+      - run: bash tools/test-ios-package.sh
