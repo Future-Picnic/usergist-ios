@@ -16,9 +16,10 @@ public struct SdkDiagnostic: Sendable, Equatable {
 /// Typical usage in an app delegate:
 ///
 /// ```swift
-/// UserGist.shared.initialize(writeKey: "pk_live_...")
+/// UserGist.shared.initialize(writeKey: "rk_live_...", presentationPaused: true)
 /// UserGist.shared.setConsent(Consent(analytics: true, feedback: true))
 /// UserGist.shared.track("opened_app")
+/// // After the host's ready screen appears: UserGist.shared.resumePresentation()
 /// ```
 public final class UserGist {
     /// Shared singleton. The SDK is only useful in singleton form since it
@@ -41,6 +42,7 @@ public final class UserGist {
     private let bootstrapQueue = UserGistQueue.serial("bootstrap")
     private let lock = NSLock()
     private var runtime: Runtime?
+    private var initializationRequested = false
     private var diagnosticHandler: ((SdkDiagnostic) -> Void)?
 
     /// Push-notifications surface. Available after `initialize`; no-ops before.
@@ -96,6 +98,9 @@ public final class UserGist {
     ///   - flushBatchSize: Max events per ingest request (default 100).
     ///   - maxQueueSize: Max queued events before drop-oldest (default 1000).
     ///   - triggerSyncInterval: Seconds between armed-trigger refreshes (default 300s).
+    ///   - presentationPaused: Start networking/analytics while deferring campaign UI.
+    ///     Use `true` during startup, then call `resumePresentation()` after navigation
+    ///     completes. Defaults to `false` for existing integrations.
     public func initialize(
         writeKey: String,
         environment: Environment = .production,
@@ -104,12 +109,18 @@ public final class UserGist {
         flushInterval: TimeInterval = 15,
         flushBatchSize: Int = 100,
         maxQueueSize: Int = 1_000,
-        triggerSyncInterval: TimeInterval = 300
+        triggerSyncInterval: TimeInterval = 300,
+        presentationPaused: Bool = false
     ) {
         lock.lock()
-        let alreadyInitialized = runtime != nil
+        guard !initializationRequested else {
+            lock.unlock()
+            return
+        }
+        initializationRequested = true
+        // Install the gate before runtime bootstrap can enqueue its first modal.
+        SDKModalCoordinator.shared.setPaused(presentationPaused)
         lock.unlock()
-        guard !alreadyInitialized else { return }
 
         let config = UserGistConfig(
             writeKey: writeKey,
@@ -133,11 +144,26 @@ public final class UserGist {
                 self.lock.unlock()
                 runtime.start()
             } catch {
+                self.lock.lock()
+                self.initializationRequested = false
+                self.lock.unlock()
                 // Never throw across SDK boundary. Just log to the default logger.
                 let fallback = UserGistLogger(debug: true)
                 fallback.error("initialize failed", error: error)
             }
         }
+    }
+
+    /// Defers new feedback, surveys, and in-app messages without stopping event
+    /// collection or network delivery. Does not dismiss an already visible modal.
+    public func pausePresentation() {
+        SDKModalCoordinator.shared.setPaused(true)
+    }
+
+    /// Call after the host's ready screen appears or its navigation completes.
+    /// Repeated calls are safe; eligible queued campaigns are presented once.
+    public func resumePresentation() {
+        SDKModalCoordinator.shared.setPaused(false)
     }
 
     /// Identifies the logged-in user. Safe to call multiple times.

@@ -22,6 +22,7 @@ final class Runtime {
     private let triggerMatcher: TriggerMatcher
     private let presenter: PromptPresenter
     private let inAppPresenter: InAppPresenter
+    private let presentationEligibility = CampaignPresentationEligibility()
     private let lifecycle: AppLifecycleObserver
     let pushRegistrar: PushRegistrar
     private let secureStore: SecureStore
@@ -139,6 +140,7 @@ final class Runtime {
             logger: logger
         )
         self.requestsCache = RequestsCache()
+        self.presentationEligibility.updateConsent(consentStore.current())
 
         // Seed user-state tracker from cached rules so first trigger fires
         // with correct windowed counters.
@@ -383,6 +385,7 @@ final class Runtime {
         let previous = consentStore.current()
         let changed = consentStore.update(purposes)
         let current = consentStore.current()
+        presentationEligibility.updateConsent(current)
         if changed {
             transport.sendConsent(current)
         }
@@ -410,6 +413,8 @@ final class Runtime {
     func reset() {
         guard !resetInProgress else { return }
         resetInProgress = true
+        presentationEligibility.invalidateIdentity()
+        presentationEligibility.updateConsent(Consent())
         resetGeneration &+= 1
         let generation = resetGeneration
         sessionOpening = false
@@ -483,14 +488,15 @@ final class Runtime {
     }
 
     func openSurvey(surveyId: String, language: String?, source: String) {
-        guard consentStore.allowsSurvey else {
+        guard !resetInProgress, consentStore.allowsSurvey else {
             logger.debug("openSurvey: survey consent not granted")
             return
         }
         logger.debug("survey.open requested: \(surveyId) language=\(language ?? "default") source=\(source)")
         let identity = identityStore.current()
+        let isValid = presentationEligibility.validator(for: .survey)
         let beginAttempt: (SurveyCampaignWithFlow) -> Void = { [weak self] survey in
-            guard let self else { return }
+            guard let self, isValid() else { return }
             let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
             self.apiClient.createSurveyAttempt(
                 surveyId: surveyId,
@@ -500,7 +506,7 @@ final class Runtime {
                 language: language,
                 appVersion: appVersion
             ) { [weak self] attemptResult in
-                guard let self else { return }
+                guard let self, isValid() else { return }
                 switch attemptResult {
                 case .success(let attempt):
                     let resume = self.surveyStore.upsert(
@@ -509,7 +515,7 @@ final class Runtime {
                         answers: attempt.progressSnapshot,
                         currentQuestionId: attempt.currentQuestionId ?? attempt.startQuestionId
                     )
-                    self.presentSurveyFlow(survey: survey, attempt: resume)
+                    self.presentSurveyFlow(survey: survey, attempt: resume, isValid: isValid)
                 case .failure(let error):
                     self.logger.warn("survey.open: attempt creation failed (\(error))")
                 }
@@ -542,7 +548,8 @@ final class Runtime {
 
     private func presentSurveyFlow(
         survey: SurveyCampaignWithFlow,
-        attempt: SurveyAttempt
+        attempt: SurveyAttempt,
+        isValid: @escaping () -> Bool
     ) {
         DispatchQueue.main.async {
             let externalHandlers = UserGist.shared.surveyHandlers
@@ -565,6 +572,7 @@ final class Runtime {
                     handlers: handlers,
                     resume: attempt,
                     logger: self.logger,
+                    isValid: isValid,
                     onProgress: { [weak self] attemptId, questionId, answers in
                         self?.work {
                             self?.saveSurveyProgress(
@@ -814,6 +822,11 @@ final class Runtime {
                         }
                         self.subjectToken = payload.subjectToken
                         self.apiClient.setSubjectToken(payload.subjectToken)
+                        if self.identityStore.current().externalId != payload.externalId {
+                            self.presentationEligibility.invalidateIdentity()
+                            self.pendingPromptCapIds.removeAll()
+                            self.pendingSurveyCapIds.removeAll()
+                        }
                         self.identityStore.setExternalId(payload.externalId)
                         let clean = payload.properties?.mapValues(\.value)
                         let stored = self.identityStore.mergeProperties(clean)
@@ -1278,6 +1291,8 @@ final class Runtime {
     // MARK: - In-app presentation
 
     private func presentInApp(_ message: ArmedInAppMessage) {
+        guard !resetInProgress else { return }
+        let isValid = presentationEligibility.validator(for: .feedback)
         let serverTheme = PromptTheme(
             colors: .init(
                 primary: message.accentColor,
@@ -1288,6 +1303,7 @@ final class Runtime {
         inAppPresenter.present(
             message: message,
             theme: resolved,
+            isValid: isValid,
             onShown: { [weak self] in
                 guard let self else { return }
                 self.work {
@@ -1370,12 +1386,13 @@ final class Runtime {
     // MARK: - Prompt firing
 
     private func firePrompt(for trigger: ArmedTrigger) {
+        guard !resetInProgress else { return }
+        let isValid = presentationEligibility.validator(for: .feedback)
         guard pendingPromptCapIds.insert(trigger.promptId).inserted else { return }
         let resolvedTheme = ThemeResolver.resolve(
             server: trigger.prompt.theme,
             override: themeOverrides
         )
-        let shownAt = Date()
         let promptId = trigger.promptId
 
         // Callback on main queue after presenter work completes.
@@ -1408,7 +1425,8 @@ final class Runtime {
         }
 
         presenter.present(
-            context: .init(prompt: trigger.prompt, theme: resolvedTheme, shownAt: shownAt),
+            context: .init(prompt: trigger.prompt, theme: resolvedTheme),
+            isValid: isValid,
             onShown: onShown,
             onFinish: onFinish
         )

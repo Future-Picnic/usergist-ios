@@ -3,6 +3,18 @@
 All notable changes to `UserGistFeedback` are documented here. Releases use
 [Semantic Versioning](https://semver.org/).
 
+## 0.1.2
+
+- Add `presentationPaused` at initialization and `pausePresentation()` /
+  `resumePresentation()` so analytics can start during splash loading while
+  feedback, surveys, and in-app messages wait for host navigation to finish.
+- Recheck identity and consent before queued campaigns appear; withdrawn consent
+  and account changes invalidate waiting campaigns, including survey fetches.
+- Wait for a visible foreground controller and completed UIKit transitions;
+  retry deferred presentations without requiring another app-open event.
+- Measure feedback response time from actual presentation, excluding queue time.
+- Make repeated initialization safe while asynchronous bootstrap is still running.
+
 ## 0.1.1
 
 - Fix a UIKit crash when feedback or survey ratings have a low or high label by

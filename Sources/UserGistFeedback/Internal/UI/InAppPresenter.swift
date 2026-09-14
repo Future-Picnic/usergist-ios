@@ -10,11 +10,12 @@ final class InAppPresenter {
     func present(
         message: ArmedInAppMessage,
         theme: ResolvedTheme,
+        isValid: @escaping () -> Bool = { true },
         onShown: @escaping () -> Void,
         onDismiss: @escaping (InAppDismissReason) -> Void,
         onCta: @escaping (InAppCta, Int) -> Void
     ) {
-        SDKModalCoordinator.shared.enqueue(owner: self) { [weak self] release in
+        SDKModalCoordinator.shared.enqueue(owner: self, key: message.messageId, isValid: isValid) { [weak self] release in
             guard let self, let top = TopViewControllerLocator.topMost() else {
                 return false
             }
