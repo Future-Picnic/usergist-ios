@@ -10,7 +10,7 @@ final class RequestsAPIContractTests: XCTestCase {
         let client = APIClient(
             baseURL: URL(string: "https://api.test")!,
             writeKey: "wk_test",
-            sdkVersion: "0.1.0",
+            sdkVersion: "0.1.2",
             logger: UserGistLogger(debug: false),
             retryPolicy: RetryPolicy(maxAttempts: 1, baseDelay: 0, maxDelay: 0),
             callbackQueue: callbackQueue,

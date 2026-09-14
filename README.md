@@ -8,7 +8,8 @@ import UserGistFeedback
 
 UserGist.shared.initialize(
     writeKey: "rk_live_xxx",
-    environment: .production
+    environment: .production,
+    presentationPaused: true
 )
 
 UserGist.shared.setConsent(Consent(analytics: true, feedback: true))
@@ -34,10 +35,46 @@ Add this package in Xcode: **File → Add Packages…** and enter
 Or in `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/Future-Picnic/usergist-ios.git", from: "0.1.1")
+.package(url: "https://github.com/Future-Picnic/usergist-ios.git", from: "0.1.2")
 ```
 
 ## Public API
+
+### Start analytics at launch; show campaigns when the app is ready
+
+Initialize once in `AppDelegate` or your SwiftUI `App` with
+`presentationPaused: true`, as above. Networking, consent, identity and events
+continue normally. Feedback, surveys and in-app messages wait in the SDK's
+presentation queue.
+
+Resume from the screen shown **after** startup loading and navigation finish:
+
+```swift
+// In the host's existing ready-content UIViewController, not its splash screen:
+override func viewDidAppear(_ animated: Bool) {
+    super.viewDidAppear(animated)
+    UserGist.shared.resumePresentation()
+}
+```
+
+For SwiftUI, call `resumePresentation()` in `.onAppear` on the loaded-content
+view, after the loading branch has been replaced. Do not use an arbitrary timer,
+the splash's `viewDidDisappear`, or a root appearance that still shows loading.
+This hook applies to anonymous and signed-in users; readiness does not require login.
+
+Call `pausePresentation()` before another flow that must not be interrupted,
+then resume when its destination is ready. Repeated pause/resume calls are safe.
+Pausing does not dismiss a campaign already on screen. Queued campaigns are
+checked again for identity and consent before presentation; revoked or
+previous-user work is discarded. The presentation queue is in memory and does
+not replay across process termination.
+
+`presentationPaused` defaults to `false` for compatibility. New integrations
+should explicitly pass `true` and wire the readiness hook. `$app_open` remains
+the automatic connection signal and campaign trigger; it does not mean the
+host's screen is ready. No extra verification event is needed.
+
+### Other APIs
 
 See `Sources/UserGistFeedback/UserGist.swift` and `Sources/UserGistFeedback/Public/`.
 

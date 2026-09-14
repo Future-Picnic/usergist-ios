@@ -35,6 +35,7 @@ enum SurveyHost {
         handlers: SurveyHandlers,
         resume: SurveyAttempt?,
         logger: UserGistLogger,
+        isValid: @escaping () -> Bool = { true },
         onProgress: @escaping (String, String?, [String: SurveyAnswerValue]) -> Void,
         onComplete: @escaping (
             String,
@@ -43,7 +44,7 @@ enum SurveyHost {
         ) -> Void,
         onAbandon: @escaping (String, @escaping (Bool) -> Void) -> Void
     ) {
-        SDKModalCoordinator.shared.enqueue(owner: modalOwner) { release in
+        SDKModalCoordinator.shared.enqueue(owner: modalOwner, key: surveyId, isValid: isValid) { release in
             guard let presenter = TopViewControllerLocator.topMost() else {
                 logger.warn("SurveyHost: no presentable view controller found")
                 return false
