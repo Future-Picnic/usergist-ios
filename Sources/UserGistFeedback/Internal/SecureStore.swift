@@ -11,7 +11,7 @@ import Security
 // falling back to plaintext UserDefaults; non-secret compatibility state can
 // still use the fallback when Keychain is temporarily unavailable.
 
-final class SecureStore {
+class SecureStore {
     /// Logical keys used by the SDK. Stable values become Keychain account
     /// strings; renames require a migration.
     enum Key: String {

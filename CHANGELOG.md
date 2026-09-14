@@ -3,6 +3,11 @@
 All notable changes to `UserGistFeedback` are documented here. Releases use
 [Semantic Versioning](https://semver.org/).
 
+## 0.1.3
+
+- Request server evaluation with each ingest batch and read instructions after upload, with periodic polling for delayed delivery. Newly activated app-open messages no longer require another reopen.
+- Preserve pending inbox reads across concurrent uploads and normalize UUID casing for local/server presentation deduplication.
+
 ## 0.1.2
 
 - Add `presentationPaused` at initialization and `pausePresentation()` /
