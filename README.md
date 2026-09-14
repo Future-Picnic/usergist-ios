@@ -92,7 +92,7 @@ React Native SDK's high-level automatic enable/disable, badge, and initial-
 notification helpers are not yet mirrored. The userGist APNs delivery path has
 passed end-to-end physical-device validation. Every integrating app must still
 configure its own APNs credentials and bundle identifiers, forward its host
-callbacks, and test a signed build on its own physical device.
+callbacks, and confirm a test notification arrives in its running app.
 
 ## Troubleshooting simulator onboarding
 
