@@ -35,7 +35,7 @@ Add this package in Xcode: **File → Add Packages…** and enter
 Or in `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/Future-Picnic/usergist-ios.git", from: "0.1.2")
+.package(url: "https://github.com/Future-Picnic/usergist-ios.git", from: "0.1.3")
 ```
 
 ## Public API

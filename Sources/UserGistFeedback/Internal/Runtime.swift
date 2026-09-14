@@ -44,6 +44,7 @@ final class Runtime {
     private var sessionRetryScheduled = false
     private var authenticatedRuntimeStarted = false
     private var isPollingInstructions = false
+    private var instructionPollRequested = false
     private var surveyCooldownByCampaign: [String: Date] = [:]
     private var isFlushingMutations = false
     private var mutationFlushTimer: DispatchSourceTimer?
@@ -53,15 +54,15 @@ final class Runtime {
     private var pendingPromptCapIds: Set<String> = []
     private var pendingSurveyCapIds: Set<String> = []
 
-    init(config: UserGistConfig) throws {
+    init(config: UserGistConfig, session: URLSession? = nil, secureStore: SecureStore? = nil) throws {
         self.config = config
         let workQueue = UserGistQueue.serial("runtime", qos: .utility)
         self.workQueue = workQueue
         self.logger = UserGistLogger(debug: config.debug)
         self.storage = try Storage(writeKeyHash: config.writeKeyHash)
-        self.secureStore = SecureStore(writeKeyHash: config.writeKeyHash, logger: logger)
-        self.identityStore = IdentityStore(storage: storage, secure: secureStore, logger: logger, queue: UserGistQueue.serial("identity"))
-        self.consentStore = ConsentStore(storage: storage, secure: secureStore, logger: logger, queue: UserGistQueue.serial("consent"))
+        self.secureStore = secureStore ?? SecureStore(writeKeyHash: config.writeKeyHash, logger: logger)
+        self.identityStore = IdentityStore(storage: storage, secure: self.secureStore, logger: logger, queue: UserGistQueue.serial("identity"))
+        self.consentStore = ConsentStore(storage: storage, secure: self.secureStore, logger: logger, queue: UserGistQueue.serial("consent"))
         self.eventQueue = EventQueue(
             storage: storage,
             logger: logger,
@@ -74,6 +75,7 @@ final class Runtime {
             sdkVersion: config.sdkVersion,
             logger: logger,
             callbackQueue: workQueue,
+            session: session,
             tlsPinSets: config.tlsPinSets
         )
         self.transport = Transport(
@@ -134,13 +136,14 @@ final class Runtime {
             logger: logger,
             queue: UserGistQueue.serial("survey-store")
         )
-        self.mutations = MutationQueue(secure: secureStore, logger: logger)
+        self.mutations = MutationQueue(secure: self.secureStore, logger: logger)
         self.localInstructionDedupe = LocalInstructionDedupe(
             storage: storage,
             logger: logger
         )
         self.requestsCache = RequestsCache()
         self.presentationEligibility.updateConsent(consentStore.current())
+        self.transport.onPollInstructions = { [weak self] in self?.pollInstructions() }
 
         // Seed user-state tracker from cached rules so first trigger fires
         // with correct windowed counters.
@@ -1108,8 +1111,13 @@ final class Runtime {
     // MARK: - Durable instruction inbox
 
     private func pollInstructions() {
-        guard !isPollingInstructions, subjectToken != nil else { return }
+        guard subjectToken != nil, !resetInProgress else { return }
+        guard !isPollingInstructions else {
+            instructionPollRequested = true
+            return
+        }
         isPollingInstructions = true
+        let generation = resetGeneration
         let stored = ((try? storage.readJSON(
             InstructionState.self,
             at: storage.instructionStateFile
@@ -1127,9 +1135,13 @@ final class Runtime {
         ) { [weak self] result in
             guard let self else { return }
             self.work {
+                guard generation == self.resetGeneration, !self.resetInProgress else {
+                    self.finishInstructionPoll()
+                    return
+                }
                 switch result {
                 case .failure(let error):
-                    self.isPollingInstructions = false
+                    self.finishInstructionPoll()
                     self.logger.warn("instruction poll failed: \(error)")
                 case .success(let envelope):
                     self.handleInstructions(envelope.instructions, stored: stored)
@@ -1140,7 +1152,7 @@ final class Runtime {
 
     private func handleInstructions(_ instructions: [SDKInstruction], stored: InstructionState) {
         guard !instructions.isEmpty else {
-            isPollingInstructions = false
+            finishInstructionPoll()
             return
         }
         var seen = stored.seen
@@ -1163,7 +1175,7 @@ final class Runtime {
                 )
             }
             guard !handled.isEmpty else {
-                isPollingInstructions = false
+                finishInstructionPoll()
                 return
             }
             let cursor = max(stored.cursor, handled.max() ?? stored.cursor)
@@ -1178,15 +1190,23 @@ final class Runtime {
             ) { [weak self] result in
                 guard let self else { return }
                 self.work {
-                    self.isPollingInstructions = false
+                    self.finishInstructionPoll()
                     if case .failure(let error) = result {
                         self.logger.warn("instruction acknowledgement failed: \(error)")
                     }
                 }
             }
         } catch {
-            isPollingInstructions = false
+            finishInstructionPoll()
             logger.error("instruction state persistence failed", error: error)
+        }
+    }
+
+    private func finishInstructionPoll() {
+        isPollingInstructions = false
+        if instructionPollRequested {
+            instructionPollRequested = false
+            pollInstructions()
         }
     }
 

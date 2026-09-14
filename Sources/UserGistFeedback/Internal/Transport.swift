@@ -16,6 +16,9 @@ final class Transport {
 
     private var isFlushing = false
     private var flushTimer: DispatchSourceTimer?
+    /// Read the durable inbox after server evaluation, and periodically for
+    /// delayed instructions even when there are no more events to upload.
+    var onPollInstructions: (() -> Void)?
 
     init(
         config: UserGistConfig,
@@ -43,6 +46,7 @@ final class Transport {
         timer.schedule(deadline: .now() + config.flushInterval, repeating: config.flushInterval)
         timer.setEventHandler { [weak self] in
             self?.flushIfNeeded()
+            self?.onPollInstructions?()
         }
         timer.resume()
         flushTimer = timer
@@ -93,6 +97,7 @@ final class Transport {
                 case .success:
                     self.eventQueue?.remove(eventIds: Set(batch.map(\.eventId)))
                     self.logger.debug("flushed \(batch.count) events")
+                    self.onPollInstructions?()
                     // If there's more left, schedule another pass on the queue.
                     if let q = self.eventQueue, !q.isEmpty {
                         self.queue.async { self.flushIfNeeded() }
@@ -127,6 +132,7 @@ final class Transport {
                 switch result {
                 case .success:
                     self.eventQueue?.remove(eventIds: [event.eventId])
+                    self.onPollInstructions?()
                     self.flushIfNeeded()
                 case .failure(.server(let status, _))
                     where (400..<500).contains(status) && status != 429:
@@ -217,6 +223,21 @@ final class Transport {
 struct IngestPayload: Encodable {
     let events: [WireIngestEvent]
     let context: IngestContext
+    var delivery: NativeIngestDelivery {
+        NativeIngestDelivery(eventIds: Array(events.prefix(100).map(\.eventId)))
+    }
+
+    private enum CodingKeys: String, CodingKey { case events, context, delivery }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(events, forKey: .events)
+        try container.encode(context, forKey: .context)
+        try container.encode(delivery, forKey: .delivery)
+    }
+}
+
+struct NativeIngestDelivery: Encodable {
+    let eventIds: [String]
 }
 
 struct WireIngestEvent: Encodable {

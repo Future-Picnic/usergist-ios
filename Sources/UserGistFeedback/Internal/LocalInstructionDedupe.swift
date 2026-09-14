@@ -45,7 +45,7 @@ final class LocalInstructionDedupe {
 
     func hydrate() {
         do {
-            let stored = try read() ?? []
+            let stored = (try read() ?? []).map { $0.lowercased() }
             var seen: Set<String> = []
             let newestUnique = stored.reversed().compactMap { key -> String? in
                 guard !key.isEmpty, seen.insert(key).inserted else { return nil }
@@ -59,6 +59,7 @@ final class LocalInstructionDedupe {
     }
 
     func remember(_ key: String) {
+        let key = key.lowercased()
         keys.removeAll { $0 == key }
         keys.append(key)
         if keys.count > Self.maxKeys {
@@ -68,6 +69,7 @@ final class LocalInstructionDedupe {
     }
 
     func consume(_ key: String) -> Bool {
+        let key = key.lowercased()
         guard let index = keys.firstIndex(of: key) else { return false }
         keys.remove(at: index)
         persist()
@@ -86,7 +88,7 @@ final class LocalInstructionDedupe {
     var count: Int { keys.count }
 
     func contains(_ key: String) -> Bool {
-        keys.contains(key)
+        keys.contains(key.lowercased())
     }
 
     private func persist() {
