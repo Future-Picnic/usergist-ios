@@ -111,18 +111,18 @@ extension AnyCodable {
 
     /// Event/identify property contract shared with the React Native SDK.
     /// The ingest API accepts bounded primitive scalars, not arbitrary JSON.
-    static func wrapEventProperties(_ dict: [String: Any]?) -> [String: AnyCodable]? {
+    static func wrapEventProperties(_ dict: [String: Any]?, allowPii: Bool = false) -> [String: AnyCodable]? {
         guard let dict else { return nil }
         var result: [String: AnyCodable] = [:]
-        for (key, value) in dict.prefix(100) {
-            guard !key.isEmpty, key.count <= 120, !isPiiKey(key) else { continue }
+        for (key, value) in dict.prefix(allowPii ? 64 : 100) {
+            guard !key.isEmpty, key.count <= 120, !["__proto__", "prototype", "constructor"].contains(key), (allowPii || !isPiiKey(key)) else { continue }
             switch value {
             case is NSNull:
                 result[key] = AnyCodable(nil)
             case let bool as Bool:
                 result[key] = AnyCodable(bool)
             case let string as String:
-                result[key] = AnyCodable(String(string.prefix(10_000)))
+                result[key] = AnyCodable(String(string.prefix(allowPii ? 8192 : 10_000)))
             case let int as Int:
                 result[key] = AnyCodable(int)
             case let int as Int32:

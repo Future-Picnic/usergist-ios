@@ -44,6 +44,24 @@ final class RequestsCacheTests: XCTestCase {
         XCTAssertEqual(after?.viewerIsFollowing, true)
     }
 
+    func testResetDiscardsViewerStateAndLateRollbacks() {
+        let cache = RequestsCache()
+        cache.upsert(makeRequest(viewerHasUpvoted: true, viewerIsFollowing: true))
+        let voteRollback = cache.applyOptimisticVote(id: "r1", vote: false)
+        let followRollback = cache.applyOptimisticFollow(id: "r1", follow: false)
+        var oldListenerCalled = false
+        cache.subscribe { _, _ in oldListenerCalled = true }
+        cache.clear()
+        XCTAssertNil(cache.get("r1"))
+        cache.upsert(makeRequest(upvoteCount: 25))
+        voteRollback()
+        followRollback()
+        XCTAssertEqual(cache.get("r1")?.upvoteCount, 25)
+        XCTAssertEqual(cache.get("r1")?.viewerHasUpvoted, false)
+        XCTAssertEqual(cache.get("r1")?.viewerIsFollowing, false)
+        XCTAssertFalse(oldListenerCalled)
+    }
+
     func test_unUpvote_doesNotRemoveFollow() {
         let cache = RequestsCache()
         cache.upsert(makeRequest(viewerHasUpvoted: true, viewerIsFollowing: true))

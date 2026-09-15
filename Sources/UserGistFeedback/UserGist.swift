@@ -43,6 +43,10 @@ public final class UserGist {
     private let lock = NSLock()
     private var runtime: Runtime?
     private var initializationRequested = false
+    private var pushSubscriptionHandler: ((PushSubscriptionState) -> Void)?
+    private var subjectTokenProvider: SubjectTokenProvider?
+    private var identityStateHandler: ((IdentityState) -> Void)?
+    private var currentIdentityState = IdentityState(status: .anonymous, anonymousId: "", externalId: nil)
     private var diagnosticHandler: ((SdkDiagnostic) -> Void)?
 
     /// Push-notifications surface. Available after `initialize`; no-ops before.
@@ -141,6 +145,22 @@ public final class UserGist {
                 self.lock.lock()
                 self.runtime = runtime
                 runtime.logger.setDiagnosticHandler(self.diagnosticHandler)
+                runtime.subjectTokenProvider = self.subjectTokenProvider
+                runtime.pushRegistrar.onSubscriptionState = { [weak self] state in
+                    guard let self else { return }
+                    self.lock.lock()
+                    let handler = self.pushSubscriptionHandler
+                    self.lock.unlock()
+                    DispatchQueue.main.async { handler?(state) }
+                }
+                runtime.onIdentityState = { [weak self] state in
+                    guard let self else { return }
+                    self.lock.lock()
+                    self.currentIdentityState = state
+                    let handler = self.identityStateHandler
+                    self.lock.unlock()
+                    DispatchQueue.main.async { handler?(state) }
+                }
                 self.lock.unlock()
                 runtime.start()
             } catch {
@@ -170,14 +190,62 @@ public final class UserGist {
     public func identify(
         userId: String,
         properties: [String: Any]? = nil,
-        subjectToken: String
+        subjectToken: String,
+        completion: ((IdentifyResult) -> Void)? = nil
     ) {
-        withRuntime { rt in
+        withRuntime(onUnavailable: { completion?(.rejected) }) { rt in
             rt.identify(
                 userId: userId,
                 properties: properties,
-                subjectToken: subjectToken
+                subjectToken: subjectToken, completion: completion
             )
+        }
+    }
+
+    public func setPushSubscriptionStateHandler(_ handler: ((PushSubscriptionState) -> Void)?) {
+        lock.lock(); pushSubscriptionHandler = handler; lock.unlock()
+        withRuntime { $0.pushRegistrar.emitState() }
+    }
+
+    public var identityState: IdentityState {
+        lock.lock(); defer { lock.unlock() }
+        return currentIdentityState
+    }
+
+    public func setIdentityStateHandler(_ handler: ((IdentityState) -> Void)?) {
+        lock.lock()
+        identityStateHandler = handler
+        let state = currentIdentityState
+        lock.unlock()
+        DispatchQueue.main.async { handler?(state) }
+    }
+
+    public func setSubjectTokenProvider(_ provider: SubjectTokenProvider?) {
+        lock.lock(); subjectTokenProvider = provider; lock.unlock()
+        withRuntime { $0.subjectTokenProvider = provider }
+    }
+
+    public func identifyAsync(userId: String, properties: [String: Any]? = nil, subjectToken: String) async -> IdentifyResult {
+        await withCheckedContinuation { continuation in
+            identify(userId: userId, properties: properties, subjectToken: subjectToken) { continuation.resume(returning: $0) }
+        }
+    }
+
+    /// Completes once local identity, consent and queues have been cleared.
+    /// Server cleanup is securely persisted and retried independently.
+    public func resetAsync() async -> Bool {
+        await withCheckedContinuation { continuation in
+            reset { continuation.resume(returning: $0) }
+        }
+    }
+
+    public func setUserProperties(_ properties: [String: Any], unset: [String] = [], completion: ((IdentifyResult) -> Void)? = nil) {
+        withRuntime(onUnavailable: { completion?(.rejected) }) { $0.setUserProperties(properties, unset: unset, completion: completion) }
+    }
+
+    public func setUserPropertiesAsync(_ properties: [String: Any], unset: [String] = []) async -> IdentifyResult {
+        await withCheckedContinuation { continuation in
+            setUserProperties(properties, unset: unset) { continuation.resume(returning: $0) }
         }
     }
 
@@ -196,9 +264,9 @@ public final class UserGist {
     }
 
     /// Clears user identity on logout. Regenerates `anonymousId`.
-    public func reset() {
-        withRuntime { rt in
-            rt.reset()
+    public func reset(completion: ((Bool) -> Void)? = nil) {
+        withRuntime(onUnavailable: { completion?(true) }) { rt in
+            rt.reset(completion: completion)
         }
     }
 
@@ -326,13 +394,13 @@ public final class UserGist {
 
     // MARK: - Internals
 
-    private func withRuntime(_ body: @escaping (Runtime) -> Void) {
+    private func withRuntime(onUnavailable: (() -> Void)? = nil, _ body: @escaping (Runtime) -> Void) {
         bootstrapQueue.async { [weak self] in
             guard let self else { return }
             self.lock.lock()
             let rt = self.runtime
             self.lock.unlock()
-            guard let rt else { return }
+            guard let rt else { DispatchQueue.main.async { onUnavailable?() }; return }
             rt.work {
                 let logger = rt.logger
                 logger.trap("public-api") {

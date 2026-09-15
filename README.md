@@ -1,5 +1,8 @@
 # UserGistFeedback iOS SDK
 
+For account IDs, backend-verified guests, token expiry, property updates, and logout, see [the identity integration guide](https://usergist.com/docs/integrations/identity). The identity lifecycle APIs require SDK **0.1.4** and the coordinated backend update; verify the installed version before copying examples into an older app. Native iOS 0.1.3 and earlier do not expose async identify/reset completion.
+
+
 Production Swift SDK for userGist feedback, surveys, in-app messaging, feature
 requests, analytics events, and host-compatible APNs delivery.
 
@@ -35,7 +38,7 @@ Add this package in Xcode: **File → Add Packages…** and enter
 Or in `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/Future-Picnic/usergist-ios.git", from: "0.1.3")
+.package(url: "https://github.com/Future-Picnic/usergist-ios.git", from: "0.1.4")
 ```
 
 ## Public API

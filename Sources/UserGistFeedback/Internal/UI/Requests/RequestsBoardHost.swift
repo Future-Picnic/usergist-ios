@@ -13,6 +13,14 @@ import UIKit
 
 @available(iOS 14.0, *)
 enum RequestsBoardHost {
+    private static let hosts = NSHashTable<UIViewController>.weakObjects()
+
+    static func reset() {
+        DispatchQueue.main.async {
+            for host in hosts.allObjects { host.dismiss(animated: false) }
+            hosts.removeAllObjects()
+        }
+    }
 
     static func present(runtime: Runtime, logger: UserGistLogger) {
         guard let top = TopViewControllerLocator.topMost() else {
@@ -25,6 +33,7 @@ enum RequestsBoardHost {
         })
         let host = UIHostingController(rootView: view)
         host.modalPresentationStyle = .pageSheet
+        hosts.add(host)
         top.present(host, animated: true)
         model.loadFirstPage()
     }
@@ -36,6 +45,7 @@ enum RequestsBoardHost {
         })
         let host = UIHostingController(rootView: view)
         host.modalPresentationStyle = .pageSheet
+        hosts.add(host)
         top.present(host, animated: true)
     }
 
