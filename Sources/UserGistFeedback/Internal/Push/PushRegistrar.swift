@@ -9,8 +9,36 @@ final class PushRegistrar {
     private let logger: UserGistLogger
     private let queue: DispatchQueue
     private let environment: String
+    private let secure: SecureStore
+    var canRegister: (() -> Bool)?
+    var onSubscriptionState: ((PushSubscriptionState) -> Void)?
+    private var registrationAttempt: UUID?
+    private var registeredIdentity: String?
+    private var lastRegistrationAt: Date = .distantPast
 
     private var lastRegistered: String?
+    private var operations: [(@escaping () -> Void) -> Void] = []
+    private var operationRunning = false
+
+    // All token mutations finish in request order, including an invalidation
+    // requested while registration is still waiting for its server response.
+    private func enqueue(_ operation: @escaping (@escaping () -> Void) -> Void) {
+        operations.append(operation)
+        drainOperations()
+    }
+
+    private func drainOperations() {
+        guard !operationRunning, !operations.isEmpty else { return }
+        operationRunning = true
+        let operation = operations.removeFirst()
+        operation { [weak self] in
+            guard let self else { return }
+            self.queue.async {
+                self.operationRunning = false
+                self.drainOperations()
+            }
+        }
+    }
 
     init(
         apiClient: APIClient,
@@ -18,7 +46,8 @@ final class PushRegistrar {
         consent: ConsentStore,
         logger: UserGistLogger,
         queue: DispatchQueue,
-        environment: String
+        environment: String,
+        secure: SecureStore
     ) {
         self.apiClient = apiClient
         self.identity = identity
@@ -26,55 +55,90 @@ final class PushRegistrar {
         self.logger = logger
         self.queue = queue
         self.environment = environment
+        self.secure = secure
     }
 
-    func register(token: String) {
+    func register(token: String, automatic: Bool = false) {
+        let requestedAlias = identity.anonymousId
         queue.async { [weak self] in
             guard let self else { return }
-            guard self.consent.allowsPush else {
-                self.logger.debug("push register skipped: consent not granted")
-                return
-            }
-            if self.lastRegistered == token { return }
-            let snap = self.identity.current()
+            self.enqueue { done in
+                var awaitingResponse = false
+                defer { if !awaitingResponse { done() } }
+                guard requestedAlias == self.identity.anonymousId else { return }
+                if automatic && self.secure.read(.pushToken) != Data(token.utf8) { return }
+                guard self.secure.read(.pushToken) == Data(token.utf8) || self.secure.write(.pushToken, Data(token.utf8)) else {
+                    self.logger.warn("push registration could not be persisted"); return
+                }
+                guard self.consent.allowsPush else {
+                    self.emitState()
+                    self.logger.debug("push register skipped: consent not granted")
+                    return
+                }
+                guard self.canRegister?() != false else { self.emitState(); return }
+                let snap = self.identity.current()
+                let owner = snap.anonymousId + ":" + (snap.externalId ?? "")
+                if self.registrationAttempt != nil { return }
+                if self.lastRegistered == token && self.registeredIdentity == owner && Date().timeIntervalSince(self.lastRegistrationAt) < 86400 { return }
+                let attempt = UUID()
+                self.registrationAttempt = attempt
+                self.emitState()
 
-            let payload = RegisterTokenPayload(
-                anonymousId: snap.anonymousId,
-                externalId: snap.externalId,
-                token: token,
-                platform: "ios",
-                environment: self.environment,
-                language: Locale.current.identifier,
-                timezone: TimeZone.current.identifier,
-                appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
-                sdkVersion: UserGistConfig.currentSDKVersion,
-                optIn: true
-            )
+                let payload = RegisterTokenPayload(
+                    anonymousId: snap.anonymousId,
+                    externalId: snap.externalId,
+                    token: token,
+                    platform: "ios",
+                    environment: self.environment,
+                    language: Locale.current.identifier,
+                    timezone: TimeZone.current.identifier,
+                    appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+                    sdkVersion: UserGistConfig.currentSDKVersion,
+                    optIn: true
+                )
 
-            self.apiClient.postVoid(path: SDKEndpoint.pushRegisterToken, body: payload) { [weak self] result in
-                switch result {
-                case .success:
-                    self?.lastRegistered = token
-                    self?.logger.debug("push token registered")
-                case .failure(let err):
-                    self?.logger.warn("push token registration failed: \(err)")
+                awaitingResponse = true
+                self.apiClient.postJSON(path: SDKEndpoint.pushRegisterToken, body: payload, responseType: RegistrationResponse.self) { [weak self] result in
+                    guard let self else { done(); return }
+                    self.queue.async {
+                        defer { done() }
+                        guard self.registrationAttempt == attempt else { return }
+                        self.registrationAttempt = nil
+                        guard self.identity.current().anonymousId == snap.anonymousId,
+                              self.identity.current().externalId == snap.externalId, self.consent.allowsPush,
+                              self.secure.read(.pushToken) == Data(token.utf8) else {
+                            self.retryRegistration()
+                            return
+                        }
+                        if case .success(let response) = result, response.registered == true {
+                            self.lastRegistered = token
+                            self.registeredIdentity = owner
+                            self.lastRegistrationAt = Date()
+                        }
+                        self.emitState()
+                    }
                 }
             }
         }
     }
 
     func invalidate(token: String) {
+        let requestedAlias = identity.anonymousId
         queue.async { [weak self] in
             guard let self else { return }
-            let snap = self.identity.current()
-            let payload = InvalidateTokenPayload(
-                anonymousId: snap.anonymousId,
-                token: token
-            )
-            self.apiClient.postVoid(path: SDKEndpoint.pushInvalidateToken, body: payload) { [weak self] result in
-                if case .success = result, self?.lastRegistered == token {
-                    self?.lastRegistered = nil
+            self.enqueue { done in
+                let snap = self.identity.current()
+                guard requestedAlias == snap.anonymousId else { done(); return }
+                if self.secure.read(.pushToken) == Data(token.utf8) {
+                    guard self.secure.delete(.pushToken) else { done(); return }
                 }
+                if self.lastRegistered == token {
+                    self.lastRegistered = nil
+                    self.registeredIdentity = nil
+                }
+                self.emitState()
+                let payload = InvalidateTokenPayload(anonymousId: snap.anonymousId, token: token)
+                self.apiClient.postVoid(path: SDKEndpoint.pushInvalidateToken, body: payload) { _ in done() }
             }
         }
     }
@@ -181,8 +245,23 @@ final class PushRegistrar {
         }
     }
 
+    func emitState() {
+        let snap = identity.current()
+        onSubscriptionState?(PushSubscriptionState(tokenAvailable: secure.read(.pushToken) != nil,
+            registered: consent.allowsPush && registeredIdentity == snap.anonymousId + ":" + (snap.externalId ?? "") && lastRegistered != nil,
+            optedIn: consent.allowsPush, anonymousId: snap.anonymousId, externalId: snap.externalId))
+    }
+
+    func retryRegistration() {
+        guard let data = secure.read(.pushToken), let token = String(data: data, encoding: .utf8) else { emitState(); return }
+        register(token: token, automatic: true)
+    }
+
     func reset() {
-        queue.async { [weak self] in self?.lastRegistered = nil }
+        lastRegistered = nil
+        registeredIdentity = nil
+        registrationAttempt = nil
+        emitState()
     }
 
 }
@@ -243,3 +322,5 @@ enum PushBeaconKind {
     case displayed
     case dismissed
 }
+
+private struct RegistrationResponse: Decodable { let registered: Bool? }

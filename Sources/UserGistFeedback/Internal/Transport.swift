@@ -14,6 +14,7 @@ final class Transport {
     private weak var identity: IdentityStore?
     private weak var consent: ConsentStore?
 
+    private var generation: UInt64 = 0
     private var isFlushing = false
     private var flushTimer: DispatchSourceTimer?
     /// Read the durable inbox after server evaluation, and periodically for
@@ -52,6 +53,12 @@ final class Transport {
         flushTimer = timer
     }
 
+    func invalidate() {
+        generation &+= 1
+        isFlushing = false
+        stopPeriodicFlush()
+    }
+
     func stopPeriodicFlush() {
         flushTimer?.cancel()
         flushTimer = nil
@@ -76,6 +83,7 @@ final class Transport {
         }.prefix(config.flushBatchSize))
         guard !batch.isEmpty else { return }
 
+        let expectedGeneration = generation
         isFlushing = true
         let context = IngestContext.current(
             anonymousId: first.anonymousId,
@@ -92,6 +100,7 @@ final class Transport {
         ) { [weak self] result in
             guard let self else { return }
             self.queue.async {
+                guard self.generation == expectedGeneration else { return }
                 self.isFlushing = false
                 switch result {
                 case .success:
@@ -104,7 +113,7 @@ final class Transport {
                     }
                 case .failure(let err):
                     if case .server(let status, _) = err,
-                       (400..<500).contains(status), status != 429 {
+                       (400..<500).contains(status), status != 429, status != 401 {
                         if batch.count == 1 {
                             self.eventQueue?.remove(eventIds: [first.eventId])
                             self.logger.warn("quarantined permanently rejected event \(first.eventId)")
@@ -121,6 +130,7 @@ final class Transport {
     }
 
     private func flushSingleForIsolation(_ event: IngestEvent, context: IngestContext) {
+        let expectedGeneration = generation
         let payload = IngestPayload(events: [WireIngestEvent(event)], context: context)
         apiClient.postJSON(
             path: SDKEndpoint.ingest,
@@ -129,13 +139,14 @@ final class Transport {
         ) { [weak self] result in
             guard let self else { return }
             self.queue.async {
+                guard self.generation == expectedGeneration else { return }
                 switch result {
                 case .success:
                     self.eventQueue?.remove(eventIds: [event.eventId])
                     self.onPollInstructions?()
                     self.flushIfNeeded()
                 case .failure(.server(let status, _))
-                    where (400..<500).contains(status) && status != 429:
+                    where (400..<500).contains(status) && status != 429 && status != 401:
                     self.eventQueue?.remove(eventIds: [event.eventId])
                     self.logger.warn("quarantined permanently rejected event \(event.eventId)")
                     self.flushIfNeeded()
@@ -148,7 +159,7 @@ final class Transport {
 
     // MARK: - Consent
 
-    func sendConsent(_ consent: Consent) {
+    func sendConsent(_ consent: Consent, subjectTokenOverride: String? = nil, completion: ((Result<Void, APIClient.APIError>) -> Void)? = nil) {
         guard let identity, let consentStore = self.consent else { return }
         let snap = identity.current()
         let current = consentStore.current()
@@ -164,10 +175,11 @@ final class Transport {
             version: consentStore.version,
             effectiveAt: consentStore.updatedAt
         )
-        apiClient.postVoid(path: SDKEndpoint.consent, body: payload) { [weak self] result in
+        apiClient.postVoid(path: SDKEndpoint.consent, body: payload, subjectTokenOverride: subjectTokenOverride) { [weak self] result in
             if case .failure(let err) = result {
                 self?.logger.warn("consent post failed: \(err)")
             }
+            completion?(result)
         }
     }
 
@@ -280,6 +292,7 @@ struct ConsentPayload: Encodable {
 }
 
 struct IdentifyPayload: Encodable {
+    var previousSubjectToken: String? = nil
     let anonymousId: String
     let externalId: String
     let properties: [String: AnyCodable]?

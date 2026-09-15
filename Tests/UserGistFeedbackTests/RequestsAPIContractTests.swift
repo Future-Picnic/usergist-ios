@@ -2,6 +2,32 @@ import XCTest
 @testable import UserGistFeedback
 
 final class RequestsAPIContractTests: XCTestCase {
+    func testResetBetweenResponseAndCallbackRejectsPreviousAccountResult() {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RequestsURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = APIClient(
+            baseURL: URL(string: "https://api.test")!, writeKey: "wk_test",
+            sdkVersion: "test", logger: UserGistLogger(debug: false),
+            retryPolicy: RetryPolicy(maxAttempts: 1, baseDelay: 0, maxDelay: 0),
+            callbackQueue: DispatchQueue(label: "requests-reset-callback"), session: session
+        )
+        client.setSubjectToken("st_account_a")
+        RequestsURLProtocol.responseBody = Self.envelope("{}")
+        // The HTTP generation check has passed, but delivery is still pending.
+        ResetDuringDecode.onDecode = { client.cancelAll(); client.setSubjectToken("st_account_b") }
+        defer { ResetDuringDecode.onDecode = nil; session.invalidateAndCancel() }
+        let delivered = expectation(description: "cancelled result delivered")
+        client.get(path: "/v1/sdk/requests", responseType: ResetDuringDecode.self) { result in
+            guard case .failure(.cancelled) = result else {
+                XCTFail("Previous account result escaped reset: \(result)")
+                delivered.fulfill(); return
+            }
+            delivered.fulfill()
+        }
+        wait(for: [delivered], timeout: 2)
+    }
+
     func test_submitAndCommentIncludeRequiredIdempotencyKeys() throws {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [RequestsURLProtocol.self]
@@ -10,7 +36,7 @@ final class RequestsAPIContractTests: XCTestCase {
         let client = APIClient(
             baseURL: URL(string: "https://api.test")!,
             writeKey: "wk_test",
-            sdkVersion: "0.1.2",
+            sdkVersion: "0.1.4",
             logger: UserGistLogger(debug: false),
             retryPolicy: RetryPolicy(maxAttempts: 1, baseDelay: 0, maxDelay: 0),
             callbackQueue: callbackQueue,
@@ -87,6 +113,11 @@ final class RequestsAPIContractTests: XCTestCase {
     private static let commentJSON = """
     {"id":"comment-1","requestId":"request-1","body":"Comment","authorAnonymousId":"anon-1","authorExternalId":null,"viewerIsAuthor":true,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}
     """
+}
+
+private struct ResetDuringDecode: Decodable {
+    static var onDecode: (() -> Void)?
+    init(from decoder: Decoder) throws { Self.onDecode?() }
 }
 
 private final class RequestsURLProtocol: URLProtocol {

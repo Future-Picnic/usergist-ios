@@ -67,56 +67,62 @@ final class IdentityStore {
         queue.sync { snapshot.anonymousId }
     }
 
-    func setExternalId(_ externalId: String?) {
+    @discardableResult
+    func setExternalId(_ externalId: String?) -> Bool {
         queue.sync {
-            guard snapshot.externalId != externalId else { return }
-            snapshot.externalId = externalId
-            persistLocked()
+            guard snapshot.externalId != externalId else { return true }
+            var next = snapshot
+            next.externalId = externalId
+            guard persistLocked(next) else { return false }
+            snapshot = next
+            return true
         }
     }
 
     @discardableResult
-    func mergeProperties(_ properties: [String: Any]?) -> [String: SegmentScalar] {
+    func mergeProperties(_ properties: [String: Any]?, unset: [String] = [], replace: Bool = false) -> [String: SegmentScalar] {
         queue.sync {
-            guard let properties else { return snapshot.properties ?? [:] }
-            var next = snapshot.properties ?? [:]
-            for (key, value) in properties {
+            var next = replace ? [:] : snapshot.properties ?? [:]
+            for (key, value) in properties ?? [:] {
                 if let scalar = UserStateTracker.scalar(from: value) {
                     next[key] = scalar
                 } else {
                     next.removeValue(forKey: key)
                 }
             }
+            for key in unset { next.removeValue(forKey: key) }
             snapshot.properties = next
-            persistLocked()
+            _ = persistLocked(snapshot)
             return next
         }
     }
 
     /// Regenerates the anonymous ID and clears the external ID.
     /// Used by `reset()` on user logout.
-    func resetAll() {
+    @discardableResult
+    func resetAll() -> Bool {
         queue.sync {
-            snapshot = Snapshot(
-                anonymousId: Self.generateAnonymousId(),
-                externalId: nil,
-                properties: nil
-            )
-            persistLocked()
+            let next = Snapshot(anonymousId: Self.generateAnonymousId(), externalId: nil, properties: nil)
+            guard persistLocked(next) else { return false }
+            snapshot = next
+            return true
         }
     }
 
-    private func persistLocked() {
-        if let secure, let data = try? JSONEncoder.usergist().encode(snapshot),
-           secure.write(.identity, data) {
-            return
+    private func persistLocked(_ next: Snapshot) -> Bool {
+        if let secure {
+            guard let data = try? JSONEncoder.usergist().encode(next), secure.write(.identity, data) else {
+                logger.warn("identity could not be persisted securely")
+                return false
+            }
+            return true
         }
-        // Fallback if Keychain unavailable. Logged as warning so the host
-        // can spot missing entitlements without crashing.
         do {
-            try storage.writeJSON(snapshot, to: storage.identityFile)
+            try storage.writeJSON(next, to: storage.identityFile)
+            return true
         } catch {
             logger.error("failed to persist identity", error: error)
+            return false
         }
     }
 

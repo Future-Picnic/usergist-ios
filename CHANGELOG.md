@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.4 — identity lifecycle
+
+- Wait for session validation before reporting a restored identity as identified. Serialize push registration/invalidation and retire invalidated tokens from automatic retries.
+- Confirmed identity state and asynchronous completion, with backend token renewal and retained account identity after expiration.
+- Property set/unset using the active session; profile PII follows the app's server allowlist, while event filtering remains in place.
+- Installation-bound credentials, anonymous ownership proof, and canonical profile adoption on identify.
+- Local account reset with cancellation and independent durable logout cleanup; stale responses cannot restore the old account.
+- Clear request-board viewer state and close SDK request screens on reset; discard delayed vote/follow rollbacks and callbacks from the previous account.
+- Push subscription state reflects server acknowledgement; OS tokens survive restart and retry after consent, connectivity, or identity changes.
+
+Requires the coordinated backend lifecycle deployment. See the [identity integration guide](https://usergist.com/docs/integrations/identity) for backend requirements and account-switching guidance.
+
+
 All notable changes to `UserGistFeedback` are documented here. Releases use
 [Semantic Versioning](https://semver.org/).
 

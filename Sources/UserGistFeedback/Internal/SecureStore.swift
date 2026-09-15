@@ -18,6 +18,7 @@ class SecureStore {
         case identity = "studio.usergist.feedback.identity"
         case consent = "studio.usergist.feedback.consent"
         case pushToken = "studio.usergist.feedback.push_token"
+        case sessionRevocations = "studio.usergist.feedback.session_revocations"
         case subjectToken = "studio.usergist.feedback.subject_token"
         case mutationQueue = "studio.usergist.feedback.mutation_queue"
     }
@@ -133,7 +134,7 @@ class SecureStore {
 private extension SecureStore.Key {
     var requiresSecureStorage: Bool {
         switch self {
-        case .pushToken, .subjectToken, .mutationQueue:
+        case .pushToken, .subjectToken, .mutationQueue, .sessionRevocations:
             return true
         case .identity, .consent:
             return false

@@ -21,6 +21,14 @@ final class RequestsCache {
     private var store: [String: FeatureRequest] = [:]
     private var listeners: [UUID: Listener] = [:]
     private let lock = NSRecursiveLock()
+    private var generation = 0
+
+    func clear() {
+        lock.lock(); defer { lock.unlock() }
+        generation &+= 1
+        store.removeAll()
+        listeners.removeAll()
+    }
 
     func upsert(_ req: FeatureRequest) {
         lock.lock(); defer { lock.unlock() }
@@ -43,6 +51,7 @@ final class RequestsCache {
     func applyOptimisticVote(id: String, vote: Bool) -> Rollback {
         lock.lock(); defer { lock.unlock() }
         guard let before = store[id] else { return {} }
+        let capturedGeneration = generation
         let upvoteDelta: Int = {
             if vote && !before.viewerHasUpvoted { return 1 }
             if !vote && before.viewerHasUpvoted { return -1 }
@@ -61,6 +70,7 @@ final class RequestsCache {
         return { [weak self] in
             guard let self = self else { return }
             self.lock.lock(); defer { self.lock.unlock() }
+            guard self.generation == capturedGeneration else { return }
             self.store[id] = before
             self.emit(id: id, req: before)
         }
@@ -71,6 +81,7 @@ final class RequestsCache {
     func applyOptimisticFollow(id: String, follow: Bool) -> Rollback {
         lock.lock(); defer { lock.unlock() }
         guard let before = store[id] else { return {} }
+        let capturedGeneration = generation
         let delta: Int = {
             if follow && !before.viewerIsFollowing { return 1 }
             if !follow && before.viewerIsFollowing { return -1 }
@@ -85,6 +96,7 @@ final class RequestsCache {
         return { [weak self] in
             guard let self = self else { return }
             self.lock.lock(); defer { self.lock.unlock() }
+            guard self.generation == capturedGeneration else { return }
             self.store[id] = before
             self.emit(id: id, req: before)
         }

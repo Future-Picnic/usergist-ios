@@ -49,6 +49,16 @@ final class Runtime {
     private var isFlushingMutations = false
     private var mutationFlushTimer: DispatchSourceTimer?
     private var mutationDeliveryCallbacks: [String: (Bool) -> Void] = [:]
+    var subjectTokenProvider: SubjectTokenProvider?
+    var onIdentityState: ((IdentityState) -> Void)?
+    private var identityCallbacks: [String: (IdentifyResult) -> Void] = [:]
+    private var resetCallbacks: [(Bool) -> Void] = []
+    private var resetRunning = false
+    private var pendingReset: (token: String?, anonymousId: String)?
+    private lazy var revocations = SessionRevocations(secure: secureStore, api: apiClient)
+    private var recoveringIdentity = false
+    private var recoveryAttempt: UUID?
+    private var lastRecovery: Date = .distantPast
     private var resetGeneration: UInt64 = 0
     private var resetInProgress = false
     private var pendingPromptCapIds: Set<String> = []
@@ -128,8 +138,9 @@ final class Runtime {
             identity: identityStore,
             consent: consentStore,
             logger: logger,
-            queue: UserGistQueue.serial("push"),
-            environment: config.environment == .production ? "production" : "sandbox"
+            queue: workQueue,
+            environment: config.environment == .production ? "production" : "sandbox",
+            secure: self.secureStore
         )
         self.surveyStore = SurveyStore(
             storage: storage,
@@ -143,7 +154,15 @@ final class Runtime {
         )
         self.requestsCache = RequestsCache()
         self.presentationEligibility.updateConsent(consentStore.current())
-        self.transport.onPollInstructions = { [weak self] in self?.pollInstructions() }
+        self.pushRegistrar.canRegister = { [weak self] in
+            guard let self, !self.resetInProgress else { return false }
+            self.revocations.drain()
+            return !self.revocations.isPending
+        }
+        self.apiClient.onAuthenticationRequired = { [weak self] in self?.recoverIdentity() }
+        self.transport.onPollInstructions = { [weak self] in
+            self?.pollInstructions(); self?.revocations.drain(); self?.pushRegistrar.retryRegistration()
+        }
 
         // Seed user-state tracker from cached rules so first trigger fires
         // with correct windowed counters.
@@ -152,12 +171,29 @@ final class Runtime {
         userStateTracker.setKnownWindows(initialWindows)
     }
 
+    /// Stop an owned runtime before disposing its injected network session.
+    /// Does not erase identity or perform a remote logout.
+    func stop() {
+        resetInProgress = true
+        resetGeneration &+= 1
+        lifecycle.stop()
+        triggerSyncTimer?.cancel()
+        mutationFlushTimer?.cancel()
+        transport.invalidate()
+        apiClient.cancelAll()
+        apiClient.setSubjectToken(nil)
+        onIdentityState = nil
+        pushRegistrar.onSubscriptionState = nil
+    }
+
     // MARK: - Lifecycle
 
     func start() {
         work { [weak self] in
             guard let self else { return }
             self.localInstructionDedupe.hydrate()
+            self.revocations.drain()
+            self.notifyIdentity(self.externalId == nil ? .anonymous : .identifying)
             let persisted = self.secureStore.read(.subjectToken)
                 .flatMap { String(data: $0, encoding: .utf8) }
             self.apiClient.setSubjectToken(persisted)
@@ -169,33 +205,33 @@ final class Runtime {
     }
 
     private func startAuthenticatedRuntime() {
-            guard !authenticatedRuntimeStarted else { return }
-            authenticatedRuntimeStarted = true
-            self.transport.startPeriodicFlush()
-            self.scheduleMutationFlush()
-            self.scheduleTriggerSync()
-            self.lifecycle.start(
-                onActive: { [weak self] in
-                    self?.inAppPresenter.retryPending()
-                    self?.refreshTriggersIfStale()
-                    self?.requestAppOpen()
-                    self?.transport.flushIfNeeded()
-                    self?.pollInstructions()
-                    self?.flushMutations()
-                },
-                onBackground: { [weak self] in
-                    self?.transport.flushIfNeeded()
-                },
-                onTerminate: { [weak self] in
-                    self?.transport.flushIfNeeded()
-                }
-            )
-            // Kick off an immediate trigger refresh so the first event can
-            // match against fresh rules.
-            self.refreshTriggers()
-            self.requestAppOpen()
-            self.pollInstructions()
-            self.flushMutations()
+        guard !authenticatedRuntimeStarted else { return }
+        authenticatedRuntimeStarted = true
+        self.transport.startPeriodicFlush()
+        self.scheduleMutationFlush()
+        self.scheduleTriggerSync()
+        self.lifecycle.start(
+            onActive: { [weak self] in
+                self?.inAppPresenter.retryPending()
+                self?.refreshTriggersIfStale()
+                self?.requestAppOpen()
+                self?.transport.flushIfNeeded()
+                self?.pollInstructions()
+                self?.flushMutations()
+            },
+            onBackground: { [weak self] in
+                self?.transport.flushIfNeeded()
+            },
+            onTerminate: { [weak self] in
+                self?.transport.flushIfNeeded()
+            }
+        )
+        // Kick off an immediate trigger refresh so the first event can
+        // match against fresh rules.
+        self.refreshTriggers()
+        self.requestAppOpen()
+        self.pollInstructions()
+        self.flushMutations()
     }
 
     private func establishSubjectSession(
@@ -255,11 +291,17 @@ final class Runtime {
                 }
                 self.subjectToken = session.subjectToken
                 self.apiClient.setSubjectToken(session.subjectToken)
+                self.notifyIdentity(self.externalId == nil ? .anonymous : .identified)
+                self.flushMutations()
+                self.pushRegistrar.retryRegistration()
                 completion(true)
+            case .failure(let error) where self.externalId != nil && Self.shouldRotateIdentity(error):
+                self.recoverIdentity()
+                completion(false)
             case .failure(let error) where mayRotateIdentity && Self.shouldRotateIdentity(error):
                 // A claimed anonymous alias cannot receive a replacement
                 // credential. Rotate before retrying without the stale token.
-                _ = self.secureStore.delete(.subjectToken)
+            guard self.secureStore.delete(.subjectToken) else { completion(false); return }
                 self.apiClient.setSubjectToken(nil)
                 self.identityStore.resetAll()
                 self.openSubjectSessionAttempt(
@@ -309,12 +351,59 @@ final class Runtime {
     var anonymousId: String { identityStore.anonymousId }
     var externalId: String? { identityStore.current().externalId }
 
-    func identify(userId: String, properties: [String: Any]?, subjectToken: String) {
+    private func recoverIdentity() {
+        guard !resetInProgress else { return }
+        notifyIdentity(.authenticationRequired)
+        guard let externalId, let provider = subjectTokenProvider, !recoveringIdentity,
+              Date().timeIntervalSince(lastRecovery) >= 5 else { return }
+        recoveringIdentity = true
+        let attempt = UUID()
+        recoveryAttempt = attempt
+        lastRecovery = Date()
+        let generation = resetGeneration
+        DispatchQueue.main.async {
+            provider(externalId) { [weak self] result in
+                self?.work {
+                    guard let self, generation == self.resetGeneration, !self.resetInProgress, self.recoveryAttempt == attempt else { return }
+                    self.recoveringIdentity = false
+                    self.recoveryAttempt = nil
+                    if case .success(let token) = result {
+                        self.identify(userId: externalId, properties: nil, subjectToken: token) { [weak self] result in
+                            if result == .synced {
+                                self?.work { self?.startAuthenticatedRuntime(); self?.flushNow() }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        workQueue.asyncAfter(deadline: .now() + 30) { [weak self] in
+            guard let self, generation == self.resetGeneration, self.recoveryAttempt == attempt else { return }
+            self.recoveringIdentity = false
+            self.recoveryAttempt = nil
+        }
+    }
+
+    func notifyIdentity(_ status: IdentityState.Status) {
+        let identity = identityStore.current()
+        onIdentityState?(IdentityState(status: status, anonymousId: identity.anonymousId, externalId: identity.externalId))
+    }
+
+    func identify(userId: String, properties: [String: Any]?, subjectToken: String, completion: ((IdentifyResult) -> Void)? = nil) {
+        let pendingId = mutations.first.flatMap { try? JSONDecoder.usergist().decode(IdentifyMutationPayload.self, from: $0.payload) }?.externalId
+        let currentId = identityStore.current().externalId
+        guard !resetInProgress, currentId == nil || currentId == userId, pendingId == nil || pendingId == userId else {
+            logger.warn("identify rejected: await reset before switching accounts")
+            DispatchQueue.main.async { completion?(.rejected) }
+            return
+        }
         guard !userId.isEmpty else {
+            DispatchQueue.main.async { completion?(.rejected) }
             logger.warn("identify requires a non-empty userId")
             return
         }
         guard subjectToken.hasPrefix("st_") else {
+            DispatchQueue.main.async { completion?(.rejected) }
             logger.warn("identify requires a server-minted subject token")
             return
         }
@@ -324,17 +413,43 @@ final class Runtime {
             subjectToken: subjectToken,
             anonymousId: identity.anonymousId,
             externalId: userId,
-            properties: AnyCodable.wrapEventProperties(cleanProperties)
+            properties: AnyCodable.wrapEventProperties(cleanProperties, allowPii: true)
         )
         guard let data = try? JSONEncoder.usergist().encode(payload),
-              mutations.enqueue(
+              let mutationId = mutations.enqueue(
                 kind: .identify,
                 purpose: .essential,
                 payload: data,
                 dedupeKey: "identify:\(userId)"
-              ) != nil else {
+              ) else {
+            DispatchQueue.main.async { completion?(.rejected) }
             logger.warn("identify could not be persisted")
             return
+        }
+        if let completion {
+            if isFlushingMutations || mutations.first?.id != mutationId || self.subjectToken == nil {
+                DispatchQueue.main.async { completion(.queued) }
+            } else { identityCallbacks[mutationId] = completion }
+        }
+        notifyIdentity(.identifying)
+        flushMutations()
+    }
+
+    func setUserProperties(_ properties: [String: Any], unset: [String], completion: ((IdentifyResult) -> Void)?) {
+        guard !resetInProgress, consentStore.current().analytics == true,
+              !properties.isEmpty || !unset.isEmpty, !unset.contains(where: { properties[$0] != nil }) else {
+            DispatchQueue.main.async { completion?(.rejected) }; return
+        }
+        let payload = UserPropertiesPayload(anonymousId: anonymousId, mutationId: UUID().uuidString,
+            set: AnyCodable.wrapEventProperties(properties, allowPii: true) ?? [:], unset: unset)
+        guard let data = try? JSONEncoder.usergist().encode(payload),
+              let id = mutations.enqueue(kind: .userProperties, purpose: .analytics, payload: data) else {
+            DispatchQueue.main.async { completion?(.rejected) }; return
+        }
+        if let completion {
+            if isFlushingMutations || mutations.first?.id != id || subjectToken == nil {
+                DispatchQueue.main.async { completion(.queued) }
+            } else { identityCallbacks[id] = completion }
         }
         flushMutations()
     }
@@ -344,6 +459,7 @@ final class Runtime {
         properties: [String: Any]?,
         purpose: EventPurpose = .analytics
     ) {
+        guard !resetInProgress else { return }
         guard !eventName.isEmpty else {
             logger.warn("track requires a non-empty event name")
             return
@@ -385,14 +501,16 @@ final class Runtime {
     }
 
     func setConsent(_ purposes: Consent) {
+        guard !resetInProgress else { return }
         let previous = consentStore.current()
         let changed = consentStore.update(purposes)
         let current = consentStore.current()
+        pushRegistrar.retryRegistration()
         presentationEligibility.updateConsent(current)
         if changed {
             transport.sendConsent(current)
         }
-        if purposes.analytics == false { eventQueue.removePurpose(.analytics) }
+        if purposes.analytics == false { eventQueue.removePurpose(.analytics); mutations.removePurpose(.analytics) }
         if purposes.feedback == false { eventQueue.removePurpose(.feedback) }
         if purposes.feedback == false {
             mutations.removePurpose(.feedback)
@@ -413,47 +531,88 @@ final class Runtime {
         }
     }
 
-    func reset() {
-        guard !resetInProgress else { return }
+    func reset(completion: ((Bool) -> Void)? = nil) {
+        if let completion { resetCallbacks.append(completion) }
+        guard !resetRunning else { return }
+        resetRunning = true
+        if pendingReset == nil {
+            pendingReset = (subjectToken ?? secureStore.read(.subjectToken).flatMap { String(data: $0, encoding: .utf8) }, anonymousId)
+        }
         resetInProgress = true
+        requestsCache.clear()
+        if #available(iOS 14.0, *) { RequestsBoardHost.reset() }
         presentationEligibility.invalidateIdentity()
         presentationEligibility.updateConsent(Consent())
         resetGeneration &+= 1
-        let generation = resetGeneration
         sessionOpening = false
         sessionRetryScheduled = false
-        apiClient.postVoid(path: SDKEndpoint.sessionRevoke, body: EmptyResponse()) {
-            [weak self] _ in
-            guard let self else { return }
-            guard generation == self.resetGeneration else { return }
-            self.apiClient.cancelAll()
-            self.identityStore.resetAll()
-            self.userStateTracker.reset()
-            self.frequencyCap.reset()
-            self.eventQueue.clear()
-            self.mutations.clear()
-            let pendingCallbacks = self.mutationDeliveryCallbacks.values
-            self.mutationDeliveryCallbacks.removeAll()
-            DispatchQueue.main.async { pendingCallbacks.forEach { $0(false) } }
-            self.rulesCache.clear()
-            self.campaignRules.clear()
-            self.surveyStore.clearAll()
-            self.presenter.reset()
-            self.inAppPresenter.reset()
-            if #available(iOS 14.0, *) { SurveyHost.reset() }
-            self.consentStore.clear()
-            self.pushRegistrar.reset()
-            _ = self.secureStore.delete(.subjectToken)
-            try? self.storage.deleteFile(at: self.storage.instructionStateFile)
-            self.localInstructionDedupe.clear()
-            self.subjectToken = nil
-            self.surveyCooldownByCampaign.removeAll()
-            self.pendingPromptCapIds.removeAll()
-            self.pendingSurveyCapIds.removeAll()
-            self.appOpenPending = false
-            self.apiClient.setSubjectToken(nil)
-            self.resetInProgress = false
-            self.establishSubjectSession(persistedToken: nil) { _ in }
+        notifyIdentity(.resetting)
+        apiClient.cancelAll()
+        apiClient.setSubjectToken(nil)
+        transport.invalidate()
+        if !revocations.remember(token: pendingReset?.token, anonymousId: pendingReset!.anonymousId) {
+            failReset("logout cleanup could not be persisted"); return
+        }
+        guard self.identityStore.resetAll() else { failReset("logout identity could not be persisted"); return }
+        self.userStateTracker.reset()
+        self.frequencyCap.reset()
+        self.eventQueue.clear()
+        guard self.mutations.clear() else { failReset("logout queue could not be cleared"); return }
+        let pendingCallbacks = Array(self.mutationDeliveryCallbacks.values)
+        self.mutationDeliveryCallbacks.removeAll()
+        DispatchQueue.main.async { pendingCallbacks.forEach { $0(false) } }
+        self.rulesCache.clear()
+        self.campaignRules.clear()
+        self.surveyStore.clearAll()
+        self.presenter.reset()
+        self.inAppPresenter.reset()
+        if #available(iOS 14.0, *) { SurveyHost.reset() }
+        self.consentStore.clear()
+        self.pushRegistrar.reset()
+        guard self.secureStore.delete(.subjectToken) else { failReset("logout credential could not be cleared"); return }
+        try? self.storage.deleteFile(at: self.storage.instructionStateFile)
+        self.localInstructionDedupe.clear()
+        self.subjectToken = nil
+        self.surveyCooldownByCampaign.removeAll()
+        self.pendingPromptCapIds.removeAll()
+        self.pendingSurveyCapIds.removeAll()
+        self.appOpenPending = false
+        self.apiClient.setSubjectToken(nil)
+        isFlushingMutations = false
+        recoveringIdentity = false
+        recoveryAttempt = nil
+        let pendingIdentityCallbacks = Array(identityCallbacks.values)
+        identityCallbacks.removeAll()
+        let callbacks = resetCallbacks
+        resetCallbacks.removeAll()
+        resetInProgress = false
+        resetRunning = false
+        pendingReset = nil
+        notifyIdentity(.anonymous)
+        DispatchQueue.main.async {
+            pendingIdentityCallbacks.forEach { $0(.rejected) }
+            callbacks.forEach { $0(true) }
+        }
+        revocations.drain()
+        establishSubjectSession(persistedToken: nil) { [weak self] ready in
+            if ready { self?.transport.startPeriodicFlush(); self?.startAuthenticatedRuntime() }
+        }
+    }
+
+    private func failReset(_ message: String) {
+        logger.warn(message)
+        resetRunning = false
+        notifyIdentity(.resetFailed)
+        let callbacks = resetCallbacks
+        resetCallbacks.removeAll()
+        let identities = Array(identityCallbacks.values)
+        identityCallbacks.removeAll()
+        let deliveries = Array(mutationDeliveryCallbacks.values)
+        mutationDeliveryCallbacks.removeAll()
+        DispatchQueue.main.async {
+            identities.forEach { $0(.rejected) }
+            deliveries.forEach { $0(false) }
+            callbacks.forEach { $0(false) }
         }
     }
 
@@ -783,11 +942,31 @@ final class Runtime {
 
     private func flushMutations() {
         guard !resetInProgress, !isFlushingMutations, let mutation = mutations.first else { return }
+        if mutation.kind == .identify && subjectToken == nil && externalId == nil { return }
         let consent = consentStore.current()
+        if mutation.purpose == .analytics && consent.analytics != true { return }
         if mutation.purpose == .feedback && consent.feedback != true { return }
         if mutation.purpose == .survey && consent.survey != true { return }
         let generation = resetGeneration
         isFlushingMutations = true
+        if consent.analytics == true && (mutation.kind == .identify || mutation.kind == .userProperties) {
+            let override = externalId != nil && mutation.kind == .identify
+                ? (try? JSONDecoder.usergist().decode(IdentifyMutationPayload.self, from: mutation.payload))?.subjectToken : nil
+            transport.sendConsent(consent, subjectTokenOverride: override) { [weak self] result in
+                guard let self, generation == self.resetGeneration, !self.resetInProgress else { return }
+                if case .failure = result { self.finishMutation(mutation, result: result, generation: generation); return }
+                self.deliverMutation(mutation, generation: generation)
+            }
+        } else {
+            deliverMutation(mutation, generation: generation)
+        }
+    }
+
+    private func deliverMutation(_ mutation: PendingMutation, generation: UInt64) {
+        guard mutation.purpose != .analytics || consentStore.current().analytics == true else {
+            finishMutation(mutation, result: .failure(.server(status: 403, body: Data("Analytics consent withdrawn".utf8))), generation: generation)
+            return
+        }
         switch mutation.kind {
         case .identify:
             guard let payload = try? JSONDecoder.usergist().decode(
@@ -799,13 +978,15 @@ final class Runtime {
                 flushMutations()
                 return
             }
-            apiClient.postVoid(
+            apiClient.postJSON(
                 path: SDKEndpoint.identify,
                 body: IdentifyPayload(
+                    previousSubjectToken: subjectToken,
                     anonymousId: payload.anonymousId,
                     externalId: payload.externalId,
-                    properties: payload.properties
+                    properties: consentStore.current().analytics == true ? payload.properties : nil
                 ),
+                responseType: IdentifiedSessionResponse.self,
                 subjectTokenOverride: payload.subjectToken
             ) { [weak self] result in
                 guard let self else { return }
@@ -815,26 +996,41 @@ final class Runtime {
                         return
                     }
                     switch result {
-                    case .success:
+                    case .success(let accepted):
+                        let sessionToken = accepted.subjectToken ?? payload.subjectToken
                         guard self.secureStore.write(
                             .subjectToken,
-                            Data(payload.subjectToken.utf8)
+                            Data(sessionToken.utf8)
                         ) else {
                             self.isFlushingMutations = false
+                            if let callback = self.identityCallbacks.removeValue(forKey: mutation.id) {
+                                DispatchQueue.main.async { callback(.queued) }
+                            }
                             return
                         }
-                        self.subjectToken = payload.subjectToken
-                        self.apiClient.setSubjectToken(payload.subjectToken)
+                        self.subjectToken = sessionToken
+                        self.apiClient.setSubjectToken(sessionToken)
                         if self.identityStore.current().externalId != payload.externalId {
                             self.presentationEligibility.invalidateIdentity()
                             self.pendingPromptCapIds.removeAll()
                             self.pendingSurveyCapIds.removeAll()
                         }
-                        self.identityStore.setExternalId(payload.externalId)
-                        let clean = payload.properties?.mapValues(\.value)
-                        let stored = self.identityStore.mergeProperties(clean)
+                        guard self.identityStore.setExternalId(payload.externalId) else {
+                            self.isFlushingMutations = false
+                            if let callback = self.identityCallbacks.removeValue(forKey: mutation.id) {
+                                DispatchQueue.main.async { callback(.queued) }
+                            }
+                            self.notifyIdentity(.authenticationRequired)
+                            return
+                        }
+                        self.notifyIdentity(.identified)
+                        let supplied = payload.properties?.mapValues(\.value)
+                        let clean = accepted.filteredKeys.map { keys in supplied?.filter { !keys.contains($0.key) } }
+                            ?? AnyCodable.wrapEventProperties(supplied)?.mapValues(\.value)
+                        let stored = self.identityStore.mergeProperties(accepted.properties?.mapValues(\.value) ?? clean, replace: accepted.properties != nil)
                         self.userStateTracker.setPersistedProperties(stored)
-                        self.pushRegistrar.rebind(externalId: payload.externalId)
+                        self.pushRegistrar.retryRegistration()
+                        self.startAuthenticatedRuntime()
                         if self.consentStore.current().analytics == true {
                             self.track(
                                 eventName: "$identify",
@@ -842,10 +1038,25 @@ final class Runtime {
                                 purpose: .analytics
                             )
                         }
-                        self.finishMutation(mutation, result: result, generation: generation)
+                        self.finishMutation(mutation, result: result.map { _ in () }, generation: generation)
                     case .failure:
-                        self.finishMutation(mutation, result: result, generation: generation)
+                        self.finishMutation(mutation, result: result.map { _ in () }, generation: generation)
                     }
+                }
+            }
+        case .userProperties:
+            guard let payload = try? JSONDecoder.usergist().decode(UserPropertiesPayload.self, from: mutation.payload) else {
+                _ = mutations.remove(mutation.id); isFlushingMutations = false; return
+            }
+            apiClient.postJSON(path: "/v1/sdk/user-properties", body: payload, responseType: UserPropertiesResponse.self) { [weak self] result in
+                self?.work {
+                    guard let self, generation == self.resetGeneration, !self.resetInProgress else { return }
+                    if case .success(let response) = result {
+                        let values = payload.set.filter { !response.filteredKeys.contains($0.key) }.mapValues(\.value)
+                        let stored = self.identityStore.mergeProperties(values, unset: payload.unset)
+                        self.userStateTracker.setPersistedProperties(stored)
+                    }
+                    self.finishMutation(mutation, result: result.map { _ in () }, generation: generation)
                 }
             }
         case .feedbackResponse:
@@ -912,6 +1123,16 @@ final class Runtime {
             return
         }
         isFlushingMutations = false
+        if mutation.kind == .identify, case .failure(.server(let status, _)) = result, status == 401 { notifyIdentity(.authenticationRequired) }
+        if let callback = identityCallbacks.removeValue(forKey: mutation.id) {
+            let status: IdentifyResult
+            switch result {
+            case .success: status = .synced
+            case .failure(.server(let code, _)) where (400..<500).contains(code) && code != 429 && code != 401: status = .rejected
+            default: status = .queued
+            }
+            DispatchQueue.main.async { callback(status) }
+        }
         switch result {
         case .success:
             if mutations.remove(mutation.id) {
@@ -921,8 +1142,9 @@ final class Runtime {
                 resolveMutationDelivery(mutation.id, delivered: false)
             }
         case .failure(.server(let status, _))
-            where (400..<500).contains(status) && status != 429:
+            where (400..<500).contains(status) && status != 429 && status != 401:
             _ = mutations.remove(mutation.id)
+            if mutation.kind == .identify { notifyIdentity(.rejected) }
             resolveMutationDelivery(mutation.id, delivered: false)
             failPendingMutationDeliveries()
             logger.warn("quarantined permanently rejected \(mutation.kind.rawValue) mutation")
@@ -941,7 +1163,15 @@ final class Runtime {
     private func failPendingMutationDeliveries() {
         let callbacks = mutationDeliveryCallbacks.values
         mutationDeliveryCallbacks.removeAll()
-        DispatchQueue.main.async { callbacks.forEach { $0(false) } }
+        let identities = Array(identityCallbacks.values)
+        identityCallbacks.removeAll()
+        let deliveries = Array(mutationDeliveryCallbacks.values)
+        mutationDeliveryCallbacks.removeAll()
+        DispatchQueue.main.async {
+            identities.forEach { $0(.rejected) }
+            deliveries.forEach { $0(false) }
+            callbacks.forEach { $0(false) }
+        }
     }
 
     private func refreshTriggersIfStale() {
@@ -1556,4 +1786,22 @@ private struct SurveyCompleteBody: Encodable {
 
 private struct SurveyAbandonMutationPayload: Codable {
     let attemptId: String
+}
+
+private struct UserPropertiesPayload: Codable {
+    let anonymousId: String
+    let mutationId: String
+    let set: [String: AnyCodable]
+    let unset: [String]
+}
+private struct UserPropertiesResponse: Decodable {
+    let applied: Bool
+    let filteredKeys: [String]
+}
+
+private struct IdentifiedSessionResponse: Decodable {
+    let subjectToken: String?
+    let expiresAt: Date?
+    let filteredKeys: [String]?
+    let properties: [String: AnyCodable]?
 }

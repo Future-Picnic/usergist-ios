@@ -2,6 +2,7 @@ import Foundation
 
 enum MutationKind: String, Codable, Equatable {
     case identify
+    case userProperties = "user-properties"
     case feedbackResponse = "feedback-response"
     case surveyComplete = "survey-complete"
     case surveyAbandon = "survey-abandon"
@@ -9,6 +10,7 @@ enum MutationKind: String, Codable, Equatable {
 
 enum MutationPurpose: String, Codable, Equatable {
     case essential
+    case analytics
     case feedback
     case survey
 }
@@ -57,20 +59,28 @@ final class MutationQueue {
         payload: Data,
         dedupeKey: String? = nil
     ) -> String? {
-        if let dedupeKey,
-           let existing = items.first(where: { $0.dedupeKey == dedupeKey }) {
-            return existing.id
+        let existing = dedupeKey.flatMap { key in items.first { $0.dedupeKey == key } }
+        if let existing, kind != .identify { return existing.id }
+        var nextPayload = payload
+        if let existing,
+           let old = try? JSONSerialization.jsonObject(with: existing.payload) as? [String: Any],
+           var next = try? JSONSerialization.jsonObject(with: payload) as? [String: Any] {
+            next["properties"] = (old["properties"] as? [String: Any] ?? [:])
+                .merging(next["properties"] as? [String: Any] ?? [:]) { _, new in new }
+            guard let encoded = try? JSONSerialization.data(withJSONObject: next) else { return nil }
+            nextPayload = encoded
         }
         let item = PendingMutation(
             id: UUID().uuidString,
             kind: kind,
             purpose: purpose,
-            payload: payload,
+            payload: nextPayload,
             createdAt: Date(),
             dedupeKey: dedupeKey
         )
         let previous = items
-        if purpose == .essential { items.insert(item, at: 0) }
+        if let existing { items = items.map { $0.id == existing.id ? item : $0 } }
+        else if purpose == .essential { items.insert(item, at: 0) }
         else { items.append(item) }
         guard persist() else {
             items = previous
@@ -96,10 +106,12 @@ final class MutationQueue {
         if !persist() { items = previous }
     }
 
-    func clear() {
+    @discardableResult
+    func clear() -> Bool {
         let previous = items
         items.removeAll()
-        if !persist() { items = previous }
+        if !persist() { items = previous; return false }
+        return true
     }
 
     private func persist() -> Bool {

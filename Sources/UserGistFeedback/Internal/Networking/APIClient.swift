@@ -25,6 +25,11 @@ final class APIClient {
     private let retryPolicy: RetryPolicy
     private let callbackQueue: DispatchQueue
     private let credentialLock = NSLock()
+    var onAuthenticationRequired: (() -> Void)?
+    private var invalidatedAt: Date = .distantPast
+    private var invalidatedToken: String?
+    private var generation: UInt64 = 0
+    private var activeTasks: [UUID: URLSessionDataTask] = [:]
     private var subjectToken: String?
     private var credentialWaiters: [UUID: () -> Void] = [:]
 
@@ -116,7 +121,15 @@ final class APIClient {
     }
 
     func cancelAll() {
-        session.getAllTasks { tasks in tasks.forEach { $0.cancel() } }
+        credentialLock.lock()
+        generation &+= 1
+        let tasks = Array(activeTasks.values)
+        activeTasks.removeAll()
+        let waiters = Array(credentialWaiters.values)
+        credentialWaiters.removeAll()
+        credentialLock.unlock()
+        tasks.forEach { $0.cancel() }
+        waiters.forEach { callbackQueue.async(execute: $0) }
     }
 
     private func whenSubjectReady(
@@ -124,18 +137,28 @@ final class APIClient {
         onTimeout: @escaping () -> Void,
         perform: @escaping () -> Void
     ) {
+        credentialLock.lock()
+        let expectedGeneration = generation
+        credentialLock.unlock()
+        let guardedPerform = { [weak self] in
+            guard let self else { return }
+            self.credentialLock.lock()
+            let current = self.generation == expectedGeneration
+            self.credentialLock.unlock()
+            if current { perform() } else { onTimeout() }
+        }
         guard required else {
-            perform()
+            guardedPerform()
             return
         }
         credentialLock.lock()
         if subjectToken != nil {
             credentialLock.unlock()
-            perform()
+            guardedPerform()
             return
         }
         let id = UUID()
-        credentialWaiters[id] = perform
+        credentialWaiters[id] = guardedPerform
         credentialLock.unlock()
         callbackQueue.asyncAfter(deadline: .now() + 15) { [weak self] in
             guard let self else { return }
@@ -470,11 +493,31 @@ final class APIClient {
         request: URLRequest,
         attempt: Int,
         allowRetry: Bool = true,
-        completion: @escaping (Result<Response, APIError>) -> Void
+        requestGeneration: UInt64? = nil,
+        completion originalCompletion: @escaping (Result<Response, APIError>) -> Void
     ) {
+        credentialLock.lock()
+        let expectedGeneration = requestGeneration ?? generation
+        let current = expectedGeneration == generation
+        credentialLock.unlock()
+        guard current else { callbackQueue.async { originalCompletion(.failure(.cancelled)) }; return }
+        // Reset can occur after the HTTP response but before its queued callback.
+        let completion: (Result<Response, APIError>) -> Void = { [weak self] result in
+            guard let self else { originalCompletion(.failure(.cancelled)); return }
+            self.credentialLock.lock()
+            let stillCurrent = self.generation == expectedGeneration
+            self.credentialLock.unlock()
+            originalCompletion(stillCurrent ? result : .failure(.cancelled))
+        }
+        let taskId = UUID()
         logger.debug("HTTP \(request.httpMethod ?? "?") \(request.url?.absoluteString ?? "?") attempt=\(attempt + 1)")
         let task = session.dataTask(with: request) { [weak self] data, response, error in
             guard let self else { return }
+            self.credentialLock.lock()
+            self.activeTasks.removeValue(forKey: taskId)
+            let current = self.generation == expectedGeneration
+            self.credentialLock.unlock()
+            guard current else { self.callbackQueue.async { completion(.failure(.cancelled)) }; return }
             if let error = error as NSError?, error.domain == NSURLErrorDomain, error.code == NSURLErrorCancelled {
                 self.callbackQueue.async { completion(.failure(.cancelled)) }
                 return
@@ -488,6 +531,7 @@ final class APIClient {
                     decision: .retryable(retryAfter: nil),
                     request: request,
                     attempt: attempt,
+                    generation: expectedGeneration,
                     underlying: .transport(error),
                     completion: completion
                 )
@@ -511,22 +555,34 @@ final class APIClient {
                     decision: .retryable(retryAfter: ra),
                     request: request,
                     attempt: attempt,
+                    generation: expectedGeneration,
                     underlying: .server(status: status, body: data),
                     completion: completion
                 )
             case .permanent:
                 self.callbackQueue.async {
+                    self.credentialLock.lock()
+                    let rejected = request.value(forHTTPHeaderField: "X-UserGist-Subject-Token")
+                    let notify = status == 401 && rejected != nil && rejected == self.subjectToken && (rejected != self.invalidatedToken || Date().timeIntervalSince(self.invalidatedAt) >= 5) && self.generation == expectedGeneration
+                    if notify { self.invalidatedToken = rejected; self.invalidatedAt = Date() }
+                    self.credentialLock.unlock()
+                    if notify { self.onAuthenticationRequired?() }
                     completion(.failure(.server(status: status, body: data)))
                 }
             }
         }
-        task.resume()
+        credentialLock.lock()
+        if generation == expectedGeneration { activeTasks[taskId] = task }
+        let shouldStart = generation == expectedGeneration
+        credentialLock.unlock()
+        if shouldStart { task.resume() } else { task.cancel(); callbackQueue.async { completion(.failure(.cancelled)) } }
     }
 
     private func handleRetryable<Response: Decodable>(
         decision: RetryDecision,
         request: URLRequest,
         attempt: Int,
+        generation: UInt64,
         underlying: APIError,
         completion: @escaping (Result<Response, APIError>) -> Void
     ) {
@@ -541,7 +597,7 @@ final class APIClient {
         let delay = retryPolicy.nextDelay(retryIndex: attempt, retryAfter: retryAfter)
         logger.debug("HTTP retry attempt=\(attempt + 2) in \(String(format: "%.2f", delay))s")
         callbackQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
-            self?.performWithRetry(request: request, attempt: attempt + 1, completion: completion)
+            self?.performWithRetry(request: request, attempt: attempt + 1, requestGeneration: generation, completion: completion)
         }
     }
 
