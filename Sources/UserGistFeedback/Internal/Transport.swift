@@ -308,6 +308,30 @@ struct SubmitResponsePayload: Codable {
     let latencyMs: Int?
 }
 
+extension SubmitResponsePayload {
+    init(info: PromptResponseInfo, identity: IdentityStore.Snapshot) {
+        self.init(
+            idempotencyKey: UUID().uuidString,
+            promptId: info.promptId,
+            anonymousId: identity.anonymousId,
+            externalId: identity.externalId,
+            // Closing a later question must preserve answers already entered.
+            answers: info.answers.map { answer in
+                let value: AnswerValueWire
+                switch answer.value {
+                case .number(let n): value = .number(n)
+                case .text(let t): value = .string(t)
+                case .choices(let list): value = .list(list)
+                case .none: value = .null
+                }
+                return ResponseAnswerWire(questionId: answer.questionId, value: value)
+            },
+            dismissed: info.dismissed,
+            latencyMs: info.latencyMs
+        )
+    }
+}
+
 struct ResponseAnswerWire: Codable {
     let questionId: String
     let value: AnswerValueWire
