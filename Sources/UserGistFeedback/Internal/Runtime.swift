@@ -1684,26 +1684,7 @@ final class Runtime {
 
     private func handleResponse(info: PromptResponseInfo) {
         let identity = identityStore.current()
-        let wireAnswers = info.answers.map { answer -> ResponseAnswerWire in
-            let value: AnswerValueWire = {
-                switch answer.value {
-                case .number(let n): return .number(n)
-                case .text(let t): return .string(t)
-                case .choices(let list): return .list(list)
-                case .none: return .null
-                }
-            }()
-            return ResponseAnswerWire(questionId: answer.questionId, value: value)
-        }
-        let payload = SubmitResponsePayload(
-            idempotencyKey: UUID().uuidString,
-            promptId: info.promptId,
-            anonymousId: identity.anonymousId,
-            externalId: identity.externalId,
-            answers: info.dismissed ? nil : wireAnswers,
-            dismissed: info.dismissed,
-            latencyMs: info.latencyMs
-        )
+        let payload = SubmitResponsePayload(info: info, identity: identity)
         if let data = try? JSONEncoder.usergist().encode(payload),
            mutations.enqueue(
             kind: .feedbackResponse,
