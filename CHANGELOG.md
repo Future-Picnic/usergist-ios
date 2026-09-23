@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5 — preserve partial feedback answers
+
+- Keep answers already entered when a user closes a later question in a feedback prompt. The submission retains those answers together with `dismissed: true`.
+- No integration API changes are required. Update the Swift package, verify the resolved version, and rebuild and release the host app.
+- Previously omitted answer values cannot be recovered from the activity event's answer count.
+
 ## 0.1.4 — identity lifecycle
 
 - Wait for session validation before reporting a restored identity as identified. Serialize push registration/invalidation and retire invalidated tokens from automatic retries.

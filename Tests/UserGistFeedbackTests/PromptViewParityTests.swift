@@ -4,6 +4,36 @@ import UIKit
 
 @MainActor
 final class PromptViewParityTests: XCTestCase {
+    func testAnsweringFirstQuestionShowsSecondAndDismissalKeepsFirstAnswer() async throws {
+        let prompt = ClientPrompt(id: "prompt", questions: [
+            .rating(.init(
+                id: "rating", title: "Rate it", subtitle: nil, imageUrl: nil,
+                scale: 5, display: .stars, lowLabel: nil, highLabel: nil
+            )),
+            .shortText(.init(
+                id: "text", title: "Tell us more", subtitle: nil, imageUrl: nil,
+                placeholder: "Type here", maxLength: 140
+            ))
+        ], theme: nil)
+        var result: PromptView.Outcome?
+        let view = PromptView(prompt: prompt, theme: .fallback, onFinish: { result = $0 })
+        view.frame = CGRect(x: 0, y: 0, width: 390, height: 800)
+        view.layoutIfNeeded()
+        let rating = try XCTUnwrap(descendants(of: view, type: RatingQuestionView.self).first)
+        let button = try XCTUnwrap(buttons(in: rating).first { $0.tag == 5 })
+        let action = try XCTUnwrap(button.actions(forTarget: rating, forControlEvent: .touchUpInside)?.first)
+        rating.perform(NSSelectorFromString(action), with: button)
+        // Allow the actual auto-advance timer and transition to run.
+        try await Task.sleep(nanoseconds: 700_000_000)
+        XCTAssertTrue(labels(in: view).contains { $0.text == "Tell us more" })
+        XCTAssertNil(result)
+        view.dismiss()
+        guard case .dismissed(let answers) = result else {
+            return XCTFail("Expected a partial dismissal")
+        }
+        XCTAssertEqual(answers, [.init(questionId: "rating", value: .number(5))])
+    }
+
     func test_allQuestionFamiliesFollowReferenceFlow() {
         let prompt = ClientPrompt(
             id: "prompt",
